@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="de">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -11,26 +11,28 @@
       darkMode: 'class',
       theme: {
         extend: {
-          fontFamily: {
-            sans: ['-apple-system','BlinkMacSystemFont','SF Pro Text','SF Pro Display','Helvetica Neue','sans-serif'],
-          },
+          fontFamily: { sans: ['-apple-system','BlinkMacSystemFont','SF Pro Text','SF Pro Display','Helvetica Neue','sans-serif'] }
         }
       }
     }
   </script>
   <style>
     * { -webkit-font-smoothing: antialiased; }
-    .dot-pulse { animation: dp 2.5s ease-in-out infinite; }
-    @keyframes dp { 0%,100%{opacity:1} 50%{opacity:.3} }
-    .fade-in { animation: fi .3s ease; }
-    @keyframes fi { from{opacity:0;transform:translateY(5px)} to{opacity:1;transform:translateY(0)} }
+    .pulse { animation: pulse 2s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+    .fade { animation: fade .3s ease; }
+    @keyframes fade { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:translateY(0)} }
+    .chev { transition: transform .22s ease; }
+    .item-open .chev { transform: rotate(180deg); }
+    .item-body { display: none; }
+    .item-open .item-body { display: block; }
   </style>
 </head>
-<body class="bg-[#f5f5f7] dark:bg-[#000] min-h-screen font-sans text-[#1d1d1f] dark:text-[#f5f5f7] transition-colors duration-200">
+<body class="bg-[#f5f5f7] dark:bg-black min-h-screen font-sans text-[#1d1d1f] dark:text-[#f5f5f7] transition-colors duration-200">
 
-<!-- LOGIN -->
+<!-- ── LOGIN ─────────────────────────────────────────────────────────────── -->
 <div id="loginScreen" class="min-h-screen flex items-center justify-center px-4">
-  <div class="w-full max-w-[340px] fade-in">
+  <div class="w-full max-w-[340px] fade">
     <div class="text-center mb-8">
       <div class="w-14 h-14 rounded-[18px] bg-black dark:bg-white flex items-center justify-center mx-auto mb-5">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="stroke-white dark:stroke-black">
@@ -44,255 +46,420 @@
       <div class="px-6 pt-6 pb-5">
         <label class="block text-[11px] font-semibold uppercase tracking-widest text-[#6e6e73] mb-2">Password</label>
         <input id="pw" type="password" placeholder="••••••••"
-          class="w-full px-4 py-2.5 text-[15px] rounded-xl border border-[#d2d2d7] dark:border-[#3a3a3c] bg-[#f5f5f7] dark:bg-[#2c2c2e] dark:text-white focus:outline-none focus:ring-2 focus:ring-black/10 dark:focus:ring-white/10 focus:border-black/20 dark:focus:border-white/20 transition" />
+          class="w-full px-4 py-2.5 text-[15px] rounded-xl border border-[#d2d2d7] dark:border-[#3a3a3c] bg-[#f5f5f7] dark:bg-[#2c2c2e] dark:text-white focus:outline-none focus:ring-2 focus:ring-black/10 dark:focus:ring-white/10 focus:border-black/20 transition" />
         <p id="loginErr" class="text-[12px] text-[#ff3b30] mt-2 h-4"></p>
       </div>
       <div class="border-t border-[#f0f0f0] dark:border-[#2c2c2e]">
-        <button onclick="login()"
-          class="w-full py-3.5 text-[15px] font-medium text-[#0071e3] dark:text-[#0a84ff] hover:bg-[#f5f5f7] dark:hover:bg-[#2c2c2e] active:bg-[#ebebeb] transition">
-          Sign In
-        </button>
+        <button onclick="doLogin()" class="w-full py-3.5 text-[15px] font-medium text-[#0071e3] dark:text-[#0a84ff] hover:bg-[#f5f5f7] dark:hover:bg-[#2c2c2e] transition">Sign In</button>
       </div>
     </div>
   </div>
 </div>
 
-<!-- DASHBOARD -->
-<div id="dashboard" class="hidden min-h-screen">
+<!-- ── DASHBOARD ─────────────────────────────────────────────────────────── -->
+<div id="dash" class="hidden">
 
   <!-- Navbar -->
-  <nav class="bg-white/75 dark:bg-[#1c1c1e]/80 backdrop-blur-2xl border-b border-black/[.06] dark:border-white/[.08] sticky top-0 z-20">
+  <nav class="bg-white/80 dark:bg-[#1c1c1e]/80 backdrop-blur-2xl border-b border-black/[.06] dark:border-white/[.08] sticky top-0 z-20">
     <div class="max-w-5xl mx-auto px-6 h-[52px] flex items-center justify-between">
       <span class="text-[15px] font-semibold tracking-tight">Signal Bot</span>
       <div class="flex items-center gap-5">
+        <span class="text-[11px] text-[#6e6e73]" id="lu"></span>
         <div class="flex items-center gap-1.5">
-          <span class="w-[7px] h-[7px] rounded-full bg-[#34c759] dot-pulse inline-block"></span>
+          <span class="w-2 h-2 rounded-full bg-[#34c759] pulse inline-block"></span>
           <span class="text-[12px] text-[#6e6e73]">Live</span>
         </div>
-        <button onclick="toggleDark()" class="text-[#6e6e73] hover:text-[#1d1d1f] dark:hover:text-white transition" title="Toggle dark mode">
-          <svg id="themeIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <button onclick="toggleDark()" class="text-[#6e6e73] hover:text-[#1d1d1f] dark:hover:text-white transition" title="Dark mode">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
             <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
             <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
             <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
           </svg>
         </button>
-        <button onclick="logout()" class="text-[13px] text-[#0071e3] dark:text-[#0a84ff] hover:underline">Sign Out</button>
+        <button onclick="doRefresh()" class="text-[13px] text-[#0071e3] dark:text-[#0a84ff] hover:underline">Refresh</button>
+        <button onclick="doLogout()" class="text-[13px] text-[#6e6e73] hover:underline">Sign Out</button>
       </div>
     </div>
   </nav>
 
-  <main class="max-w-5xl mx-auto px-6 py-8 space-y-3">
+  <main class="max-w-5xl mx-auto px-6 py-7 space-y-3">
 
     <!-- Metrics -->
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-      <div class="bg-white dark:bg-[#1c1c1e] rounded-2xl px-5 py-4">
-        <p class="text-[11px] font-semibold uppercase tracking-widest text-[#6e6e73] mb-2">Total P&L</p>
-        <p class="text-[24px] font-semibold tracking-tight text-[#34c759]">+$2,814</p>
-        <p class="text-[12px] text-[#6e6e73] mt-1">↑ 12.4% this month</p>
-      </div>
-      <div class="bg-white dark:bg-[#1c1c1e] rounded-2xl px-5 py-4">
-        <p class="text-[11px] font-semibold uppercase tracking-widest text-[#6e6e73] mb-2">Win Rate</p>
-        <p class="text-[24px] font-semibold tracking-tight">65%</p>
-        <p class="text-[12px] text-[#6e6e73] mt-1">44 trades total</p>
-      </div>
-      <div class="bg-white dark:bg-[#1c1c1e] rounded-2xl px-5 py-4">
-        <p class="text-[11px] font-semibold uppercase tracking-widest text-[#6e6e73] mb-2">Open</p>
-        <p class="text-[24px] font-semibold tracking-tight">3</p>
-        <p class="text-[12px] text-[#6e6e73] mt-1">Unrealized +$124</p>
-      </div>
-      <div class="bg-white dark:bg-[#1c1c1e] rounded-2xl px-5 py-4">
-        <p class="text-[11px] font-semibold uppercase tracking-widest text-[#6e6e73] mb-2">Today</p>
-        <p class="text-[24px] font-semibold tracking-tight">7</p>
-        <p class="text-[12px] text-[#6e6e73] mt-1">Signals processed</p>
-      </div>
-    </div>
+    <div class="grid grid-cols-3 md:grid-cols-6 gap-3" id="metrics"></div>
 
-    <!-- Chart + Side info -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-      <div class="md:col-span-2 bg-white dark:bg-[#1c1c1e] rounded-2xl px-5 py-4">
-        <div class="flex items-center justify-between mb-4">
-          <p class="text-[11px] font-semibold uppercase tracking-widest text-[#6e6e73]">Cumulative P&L</p>
-          <div class="flex gap-1">
-            <button onclick="setRange(7)" id="btn7"  class="range-btn text-[11px] font-medium px-2.5 py-1 rounded-lg bg-black dark:bg-white text-white dark:text-black transition">7d</button>
-            <button onclick="setRange(30)" id="btn30" class="range-btn text-[11px] font-medium px-2.5 py-1 rounded-lg text-[#6e6e73] hover:bg-[#f5f5f7] dark:hover:bg-[#2c2c2e] transition">30d</button>
+    <!-- Chart -->
+    <div class="bg-white dark:bg-[#1c1c1e] rounded-2xl px-5 py-4">
+      <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <p class="text-[11px] font-semibold uppercase tracking-widest text-[#6e6e73]">Equity Kurve</p>
+        <div class="flex items-center gap-2">
+          <div class="flex gap-1" id="rangeBtns">
+            <button onclick="setDays('1',this)"  class="rng text-[11px] font-medium px-2.5 py-1 rounded-lg text-[#6e6e73] hover:bg-[#f5f5f7] dark:hover:bg-[#2c2c2e] transition">1D</button>
+            <button onclick="setDays('7',this)"  class="rng text-[11px] font-medium px-2.5 py-1 rounded-lg bg-black dark:bg-white text-white dark:text-black transition">7D</button>
+            <button onclick="setDays('30',this)" class="rng text-[11px] font-medium px-2.5 py-1 rounded-lg text-[#6e6e73] hover:bg-[#f5f5f7] dark:hover:bg-[#2c2c2e] transition">30D</button>
+            <button onclick="setDays('90',this)" class="rng text-[11px] font-medium px-2.5 py-1 rounded-lg text-[#6e6e73] hover:bg-[#f5f5f7] dark:hover:bg-[#2c2c2e] transition">90D</button>
+          </div>
+          <div class="flex gap-1" id="ctypeBtns">
+            <button onclick="setCtype('equity',this)"  class="ctp text-[11px] font-medium px-2.5 py-1 rounded-lg bg-black dark:bg-white text-white dark:text-black transition">Balance</button>
+            <button onclick="setCtype('upnl',this)"    class="ctp text-[11px] font-medium px-2.5 py-1 rounded-lg text-[#6e6e73] hover:bg-[#f5f5f7] dark:hover:bg-[#2c2c2e] transition">Unreal. PnL</button>
           </div>
         </div>
-        <div class="h-[160px]"><canvas id="pnlChart"></canvas></div>
       </div>
-
-      <div class="space-y-3">
-        <div class="bg-white dark:bg-[#1c1c1e] rounded-2xl px-5 py-4">
-          <p class="text-[11px] font-semibold uppercase tracking-widest text-[#6e6e73] mb-3">Account</p>
-          <div class="flex justify-between py-2 border-b border-[#f0f0f0] dark:border-[#2c2c2e] text-[13px]"><span class="text-[#6e6e73]">Balance</span><span class="font-medium">$4,250</span></div>
-          <div class="flex justify-between py-2 border-b border-[#f0f0f0] dark:border-[#2c2c2e] text-[13px]"><span class="text-[#6e6e73]">Free margin</span><span class="font-medium">$4,070</span></div>
-          <div class="flex justify-between py-2 text-[13px]"><span class="text-[#6e6e73]">Exchange</span><span class="font-medium">Blofin</span></div>
-        </div>
-        <div class="bg-white dark:bg-[#1c1c1e] rounded-2xl px-5 py-4">
-          <p class="text-[11px] font-semibold uppercase tracking-widest text-[#6e6e73] mb-3">Settings</p>
-          <div class="flex justify-between py-2 border-b border-[#f0f0f0] dark:border-[#2c2c2e] text-[13px]"><span class="text-[#6e6e73]">Risk / trade</span><span class="font-medium">$60</span></div>
-          <div class="flex justify-between py-2 border-b border-[#f0f0f0] dark:border-[#2c2c2e] text-[13px]"><span class="text-[#6e6e73]">Min R:R</span><span class="font-medium">2 : 1</span></div>
-          <div class="flex justify-between py-2 text-[13px]"><span class="text-[#6e6e73]">Last signal</span><span class="font-medium">2 min ago</span></div>
-        </div>
-      </div>
+      <div class="h-[180px]" id="chartWrap"><canvas id="eqChart"></canvas></div>
     </div>
 
-    <!-- Signals -->
+    <!-- Calendar -->
     <div class="bg-white dark:bg-[#1c1c1e] rounded-2xl px-5 py-4">
-      <div class="flex items-center justify-between mb-4 gap-3 flex-wrap">
-        <p class="text-[11px] font-semibold uppercase tracking-widest text-[#6e6e73]">Signals</p>
+      <div class="flex items-center justify-between mb-3">
+        <p class="text-[11px] font-semibold uppercase tracking-widest text-[#6e6e73]">Kalender</p>
         <div class="flex items-center gap-2">
-          <select id="filterSide" onchange="renderTable()"
-            class="text-[12px] bg-[#f5f5f7] dark:bg-[#2c2c2e] dark:text-white border-none rounded-lg px-3 py-1.5 focus:outline-none cursor-pointer">
-            <option value="">All sides</option>
-            <option value="Long">Long</option>
-            <option value="Short">Short</option>
-          </select>
-          <select id="filterStatus" onchange="renderTable()"
-            class="text-[12px] bg-[#f5f5f7] dark:bg-[#2c2c2e] dark:text-white border-none rounded-lg px-3 py-1.5 focus:outline-none cursor-pointer">
-            <option value="">All status</option>
-            <option value="Filled">Filled</option>
-            <option value="Open">Open</option>
-            <option value="Pending">Pending</option>
-          </select>
+          <button onclick="moveMonth(-1)" class="w-7 h-7 rounded-full border border-[#d2d2d7] dark:border-[#3a3a3c] text-[14px] flex items-center justify-center hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black transition">‹</button>
+          <span class="text-[13px] font-medium min-w-[130px] text-center" id="calLabel"></span>
+          <button onclick="moveMonth(1)"  class="w-7 h-7 rounded-full border border-[#d2d2d7] dark:border-[#3a3a3c] text-[14px] flex items-center justify-center hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black transition">›</button>
         </div>
       </div>
-      <div class="overflow-x-auto">
-        <table class="w-full text-[13px]">
-          <thead>
-            <tr class="border-b border-[#f0f0f0] dark:border-[#2c2c2e]">
-              <th class="text-left text-[11px] font-semibold text-[#6e6e73] uppercase tracking-widest pb-2.5">Symbol</th>
-              <th class="text-left text-[11px] font-semibold text-[#6e6e73] uppercase tracking-widest pb-2.5">Side</th>
-              <th class="text-left text-[11px] font-semibold text-[#6e6e73] uppercase tracking-widest pb-2.5">Entry</th>
-              <th class="text-left text-[11px] font-semibold text-[#6e6e73] uppercase tracking-widest pb-2.5 hidden sm:table-cell">TP / SL</th>
-              <th class="text-left text-[11px] font-semibold text-[#6e6e73] uppercase tracking-widest pb-2.5">Status</th>
-              <th class="text-right text-[11px] font-semibold text-[#6e6e73] uppercase tracking-widest pb-2.5">P&amp;L</th>
-            </tr>
-          </thead>
-          <tbody id="signalsBody"></tbody>
-        </table>
+      <div class="grid grid-cols-7 gap-1" id="calGrid"></div>
+    </div>
+
+    <!-- Open Positions -->
+    <div class="bg-white dark:bg-[#1c1c1e] rounded-2xl px-5 py-4">
+      <div class="flex items-center justify-between mb-3">
+        <p class="text-[11px] font-semibold uppercase tracking-widest text-[#6e6e73]">Offene Positionen</p>
+        <span class="text-[12px] text-[#6e6e73]" id="posCount"></span>
       </div>
+      <div id="positions"></div>
+    </div>
+
+    <!-- Trade History -->
+    <div class="bg-white dark:bg-[#1c1c1e] rounded-2xl px-5 py-4">
+      <div class="flex items-center justify-between mb-3">
+        <p class="text-[11px] font-semibold uppercase tracking-widest text-[#6e6e73]">Trade History</p>
+        <span class="text-[12px] text-[#6e6e73]" id="tradeCount"></span>
+      </div>
+      <div id="history"></div>
+    </div>
+
+    <!-- Awards -->
+    <div class="bg-white dark:bg-[#1c1c1e] rounded-2xl px-5 py-4">
+      <p class="text-[11px] font-semibold uppercase tracking-widest text-[#6e6e73] mb-4">Best & Worst</p>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3" id="awards"></div>
     </div>
 
   </main>
 </div>
 
+<!-- Day Modal -->
+<div id="modal" class="hidden fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center px-4" onclick="if(event.target===this)closeModal()">
+  <div class="bg-white dark:bg-[#1c1c1e] rounded-2xl p-6 w-full max-w-sm shadow-xl fade">
+    <div class="flex justify-between items-center mb-4">
+      <p class="text-[15px] font-semibold" id="modalTitle"></p>
+      <button onclick="closeModal()" class="w-7 h-7 rounded-full bg-[#f5f5f7] dark:bg-[#2c2c2e] text-[#6e6e73] hover:bg-[#ff3b30] hover:text-white text-[12px] flex items-center justify-center transition">✕</button>
+    </div>
+    <div id="modalBody"></div>
+  </div>
+</div>
+
 <script>
 // ── CONFIG ────────────────────────────────────────────────────────────────
-const PASSWORD = "signal2024"; // change to your password
+const PASSWORD = "signal2024"; // change this
+
+// ── STATE ─────────────────────────────────────────────────────────────────
+let trades = [], positions = [], balance = {}, stats = {}, equity = [];
+let days = '7', ctype = 'equity', chart = null;
+let calY = new Date().getFullYear(), calM = new Date().getMonth();
 
 // ── AUTH ──────────────────────────────────────────────────────────────────
-function login() {
+function doLogin() {
   if (document.getElementById('pw').value === PASSWORD) {
     document.getElementById('loginScreen').classList.add('hidden');
-    document.getElementById('dashboard').classList.remove('hidden');
+    document.getElementById('dash').classList.remove('hidden');
     document.getElementById('loginErr').textContent = '';
-    initDashboard();
+    loadData();
+    setInterval(loadData, 30000);
   } else {
     document.getElementById('loginErr').textContent = 'Incorrect password.';
   }
 }
-document.getElementById('pw').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+document.getElementById('pw').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
 
-function logout() {
-  document.getElementById('dashboard').classList.add('hidden');
+function doLogout() {
+  document.getElementById('dash').classList.add('hidden');
   document.getElementById('loginScreen').classList.remove('hidden');
   document.getElementById('pw').value = '';
-  if (pnlChart) { pnlChart.destroy(); pnlChart = null; }
 }
+
+function doRefresh() { loadData(); }
 
 function toggleDark() {
   document.documentElement.classList.toggle('dark');
-  if (pnlChart) { pnlChart.destroy(); pnlChart = null; buildChart(currentRange); }
+  if (chart) { chart.destroy(); chart = null; renderChart(); }
 }
 
-// ── DATA — replace with real API fetches ──────────────────────────────────
-const signals = [
-  { symbol:'BTC/USDT',  side:'Long',  entry:'67,420', tp:'69,100', sl:'66,800', status:'Filled',  pnl:'+$180', pos:true  },
-  { symbol:'ETH/USDT',  side:'Short', entry:'3,512',  tp:'3,380',  sl:'3,600',  status:'Filled',  pnl:'−$60',  pos:false },
-  { symbol:'SOL/USDT',  side:'Long',  entry:'142.50', tp:'148.00', sl:'139.00', status:'Open',    pnl:'+$44',  pos:true  },
-  { symbol:'BNB/USDT',  side:'Short', entry:'385.00', tp:'370.00', sl:'395.00', status:'Pending', pnl:'—',     pos:null  },
-  { symbol:'XRP/USDT',  side:'Long',  entry:'0.5820', tp:'0.6100', sl:'0.5600', status:'Filled',  pnl:'+$96',  pos:true  },
-  { symbol:'DOGE/USDT', side:'Short', entry:'0.1340', tp:'0.1200', sl:'0.1420', status:'Filled',  pnl:'+$72',  pos:true  },
-];
+// ── DATA ──────────────────────────────────────────────────────────────────
+async function loadData() {
+  try {
+    const [s, p, t, b, e] = await Promise.all([
+      fetch('/api/stats').then(r => r.json()),
+      fetch('/api/positions').then(r => r.json()),
+      fetch('/api/trades').then(r => r.json()),
+      fetch('/api/balance').then(r => r.json()),
+      fetch(`/api/equity?days=${days}`).then(r => r.json()),
+    ]);
+    stats = s; positions = p; trades = t; balance = b; equity = e;
+    document.getElementById('lu').textContent = new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+    renderMetrics(); renderChart(); renderCal(); renderPositions(); renderHistory(); renderAwards();
+  } catch (err) { console.error('Load error:', err); }
+}
 
-const pnl7  = [120, 80, 220, 160, 390, 520, 680];
-const pnl30 = [20,60,40,100,80,150,130,200,180,240,210,300,280,350,320,400,380,460,440,510,490,560,540,620,600,680,700,760,780,820];
+// ── METRICS ───────────────────────────────────────────────────────────────
+function renderMetrics() {
+  const upnl = positions.reduce((s, p) => s + parseFloat(p.unrealizedPL || 0), 0);
+  const bal  = parseFloat(balance.accountEquity || 0);
+  const rpnl = parseFloat(stats.totalPnl || 0);
+  const avail = parseFloat(balance.available || 0);
+  const items = [
+    { label: 'Balance',        val: '$' + bal.toFixed(2),                        sub: 'Verf. $' + avail.toFixed(2),            color: 'text-[#1d1d1f] dark:text-[#f5f5f7]' },
+    { label: 'Unrealis. PnL',  val: (upnl >= 0 ? '+' : '') + '$' + upnl.toFixed(2), sub: '',                                   color: upnl >= 0 ? 'text-[#34c759]' : 'text-[#ff3b30]' },
+    { label: 'Realis. PnL',    val: (rpnl >= 0 ? '+' : '') + '$' + rpnl.toFixed(2), sub: '',                                   color: rpnl >= 0 ? 'text-[#34c759]' : 'text-[#ff3b30]' },
+    { label: 'Win Rate',       val: stats.total > 0 ? stats.rate + '%' : '—',    sub: (stats.wins || 0) + 'W / ' + (stats.losses || 0) + 'L', color: 'text-[#1d1d1f] dark:text-[#f5f5f7]' },
+    { label: 'Trades',         val: stats.total || 0,                             sub: '',                                      color: 'text-[#1d1d1f] dark:text-[#f5f5f7]' },
+    { label: 'Offen',          val: positions.length,                             sub: '',                                      color: 'text-[#1d1d1f] dark:text-[#f5f5f7]' },
+  ];
+  document.getElementById('metrics').innerHTML = items.map(m => `
+    <div class="bg-white dark:bg-[#1c1c1e] rounded-2xl px-4 py-3.5">
+      <p class="text-[10px] font-semibold uppercase tracking-widest text-[#6e6e73] mb-1.5">${m.label}</p>
+      <p class="text-[18px] font-semibold tracking-tight ${m.color}">${m.val}</p>
+      ${m.sub ? `<p class="text-[11px] text-[#6e6e73] mt-0.5">${m.sub}</p>` : ''}
+    </div>`).join('');
+}
 
 // ── CHART ─────────────────────────────────────────────────────────────────
-let pnlChart = null;
-let currentRange = 7;
-
-function setRange(n) {
-  currentRange = n;
-  document.querySelectorAll('.range-btn').forEach(b => {
-    const on = b.id === 'btn' + n;
-    b.className = on
-      ? 'range-btn text-[11px] font-medium px-2.5 py-1 rounded-lg bg-black dark:bg-white text-white dark:text-black transition'
-      : 'range-btn text-[11px] font-medium px-2.5 py-1 rounded-lg text-[#6e6e73] hover:bg-[#f5f5f7] dark:hover:bg-[#2c2c2e] transition';
-  });
-  if (pnlChart) { pnlChart.destroy(); pnlChart = null; }
-  buildChart(n);
+function setDays(d, btn) {
+  days = d;
+  document.querySelectorAll('.rng').forEach(b => b.className = b === btn
+    ? 'rng text-[11px] font-medium px-2.5 py-1 rounded-lg bg-black dark:bg-white text-white dark:text-black transition'
+    : 'rng text-[11px] font-medium px-2.5 py-1 rounded-lg text-[#6e6e73] hover:bg-[#f5f5f7] dark:hover:bg-[#2c2c2e] transition');
+  fetch(`/api/equity?days=${days}`).then(r => r.json()).then(e => { equity = e; if (chart) { chart.destroy(); chart = null; } renderChart(); });
 }
 
-function buildChart(n) {
-  const data   = n === 7 ? pnl7 : pnl30;
+function setCtype(t, btn) {
+  ctype = t;
+  document.querySelectorAll('.ctp').forEach(b => b.className = b === btn
+    ? 'ctp text-[11px] font-medium px-2.5 py-1 rounded-lg bg-black dark:bg-white text-white dark:text-black transition'
+    : 'ctp text-[11px] font-medium px-2.5 py-1 rounded-lg text-[#6e6e73] hover:bg-[#f5f5f7] dark:hover:bg-[#2c2c2e] transition');
+  if (chart) { chart.destroy(); chart = null; }
+  renderChart();
+}
+
+function renderChart() {
+  const wrap = document.getElementById('chartWrap');
+  if (!equity || equity.length < 2) {
+    wrap.innerHTML = '<div class="h-full flex items-center justify-center text-[13px] text-[#6e6e73]">Wird aufgebaut... (Snapshots alle 30 Min)</div>';
+    return;
+  }
+  wrap.innerHTML = '<canvas id="eqChart"></canvas>';
+  const data   = equity.map(e => ctype === 'equity' ? e.equity : e.upnl);
+  const labels = equity.map(e => new Date(e.time).toLocaleString('de-DE', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }));
+  const up     = data[data.length - 1] >= data[0];
+  const lc     = up ? '#34c759' : '#ff3b30';
   const isDark = document.documentElement.classList.contains('dark');
-  const labels = data.map((_, i) => {
-    const d = new Date();
-    d.setDate(d.getDate() - (data.length - 1 - i));
-    return d.toLocaleDateString('en', { month:'short', day:'numeric' });
-  });
-  const ctx  = document.getElementById('pnlChart').getContext('2d');
-  const grad = ctx.createLinearGradient(0, 0, 0, 160);
-  grad.addColorStop(0, 'rgba(52,199,89,.15)');
-  grad.addColorStop(1, 'rgba(52,199,89,0)');
-  pnlChart = new Chart(ctx, {
+  const ctx    = document.getElementById('eqChart').getContext('2d');
+  const grad   = ctx.createLinearGradient(0, 0, 0, 180);
+  grad.addColorStop(0, up ? 'rgba(52,199,89,.14)' : 'rgba(255,59,48,.1)');
+  grad.addColorStop(1, 'rgba(0,0,0,0)');
+  chart = new Chart(ctx, {
     type: 'line',
-    data: { labels, datasets: [{ data, borderColor:'#34c759', borderWidth:1.8, pointRadius:0, pointHoverRadius:4,
-      pointHoverBackgroundColor:'#34c759', fill:true, backgroundColor:grad, tension:.4 }] },
+    data: { labels, datasets: [{ data, borderColor: lc, backgroundColor: grad, borderWidth: 1.8, fill: true, tension: 0.4, pointRadius: data.length > 30 ? 0 : 3, pointHoverRadius: 5, pointBackgroundColor: lc, pointBorderColor: isDark ? '#1c1c1e' : '#fff', pointBorderWidth: 2 }] },
     options: {
-      responsive:true, maintainAspectRatio:false,
-      plugins: { legend:{ display:false }, tooltip:{
-        backgroundColor: isDark ? '#2c2c2e' : '#fff',
-        titleColor: isDark ? '#ebebf0' : '#1d1d1f',
-        bodyColor:'#34c759',
-        borderColor: isDark ? '#3a3a3c' : '#e5e5ea',
-        borderWidth:1, padding:10, cornerRadius:10,
-        callbacks:{ label: c => ' $' + c.parsed.y }
-      }},
-      scales:{
-        x:{ grid:{display:false}, border:{display:false}, ticks:{ color:'#6e6e73', font:{size:10}, maxTicksLimit: n===7?7:8 }},
-        y:{ grid:{ color: isDark?'rgba(255,255,255,.05)':'rgba(0,0,0,.04)' }, border:{display:false},
-          ticks:{ color:'#6e6e73', font:{size:10}, callback: v => '$'+v }}
-      }
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { backgroundColor: isDark ? '#2c2c2e' : '#fff', titleColor: isDark ? '#f5f5f7' : '#1d1d1f', bodyColor: lc, borderColor: isDark ? '#3a3a3c' : '#e5e5ea', borderWidth: 1, padding: 10, cornerRadius: 10, callbacks: { label: c => ' $' + c.raw } } },
+      scales: {
+        x: { grid: { display: false }, border: { display: false }, ticks: { color: '#6e6e73', font: { size: 10 }, maxTicksLimit: 6 } },
+        y: { grid: { color: isDark ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.04)' }, border: { display: false }, ticks: { color: '#6e6e73', font: { size: 10 }, callback: v => '$' + v } }
+      },
+      interaction: { intersect: false, mode: 'index' }
     }
   });
 }
 
-// ── TABLE ─────────────────────────────────────────────────────────────────
-function renderTable() {
-  const side   = document.getElementById('filterSide').value;
-  const status = document.getElementById('filterStatus').value;
-  const list   = signals.filter(s => (!side || s.side === side) && (!status || s.status === status));
-  const sc     = { Filled:'text-[#1d1d1f] dark:text-[#f5f5f7]', Open:'text-[#0071e3] dark:text-[#0a84ff]', Pending:'text-[#6e6e73]' };
-  document.getElementById('signalsBody').innerHTML = list.length
-    ? list.map(s => `
-      <tr class="border-b border-[#f0f0f0] dark:border-[#2c2c2e] last:border-0 hover:bg-[#f5f5f7] dark:hover:bg-[#2c2c2e]/40 transition-colors">
-        <td class="py-2.5 font-medium">${s.symbol}</td>
-        <td class="py-2.5 font-medium ${s.side==='Long'?'text-[#34c759]':'text-[#ff3b30]'}">${s.side}</td>
-        <td class="py-2.5">${s.entry}</td>
-        <td class="py-2.5 text-[#6e6e73] hidden sm:table-cell">${s.tp} / ${s.sl}</td>
-        <td class="py-2.5 ${sc[s.status]||''}">${s.status}</td>
-        <td class="py-2.5 text-right font-medium ${s.pos===true?'text-[#34c759]':s.pos===false?'text-[#ff3b30]':'text-[#6e6e73]'}">${s.pnl}</td>
-      </tr>`).join('')
-    : `<tr><td colspan="6" class="py-8 text-center text-[13px] text-[#6e6e73]">No signals match the filter.</td></tr>`;
+// ── CALENDAR ──────────────────────────────────────────────────────────────
+function moveMonth(d) { calM += d; if (calM < 0) { calM = 11; calY--; } if (calM > 11) { calM = 0; calY++; } renderCal(); }
+
+function renderCal() {
+  const mn = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+  document.getElementById('calLabel').textContent = mn[calM] + ' ' + calY;
+  const dm = {};
+  for (const t of trades) {
+    if (t.status !== 'closed' || !t.closeTime) continue;
+    const d = new Date(t.closeTime);
+    if (d.getFullYear() !== calY || d.getMonth() !== calM) continue;
+    dm[d.getDate()] = (dm[d.getDate()] || 0) + (t.pnl || 0);
+  }
+  const first = new Date(calY, calM, 1).getDay();
+  const dim   = new Date(calY, calM + 1, 0).getDate();
+  const off   = first === 0 ? 6 : first - 1;
+  const today = new Date();
+  const isCur = today.getFullYear() === calY && today.getMonth() === calM;
+  let html = ['Mo','Di','Mi','Do','Fr','Sa','So'].map(d => `<div class="text-center text-[10px] font-semibold text-[#6e6e73] py-1">${d}</div>`).join('');
+  for (let i = 0; i < off; i++) html += '<div></div>';
+  for (let day = 1; day <= dim; day++) {
+    const pnl = dm[day];
+    const isT = isCur && today.getDate() === day;
+    let cls = 'aspect-square rounded-xl flex flex-col items-center justify-center text-[12px] font-semibold cursor-pointer transition hover:scale-105';
+    if (isT)            cls += ' ring-1 ring-[#0071e3]';
+    if (pnl !== undefined) cls += pnl >= 0 ? ' bg-[#34c759]/10 hover:bg-[#34c759]/18' : ' bg-[#ff3b30]/8 hover:bg-[#ff3b30]/14';
+    const sub = pnl !== undefined ? `<span class="text-[9px] font-bold ${pnl >= 0 ? 'text-[#34c759]' : 'text-[#ff3b30]'}">${pnl >= 0 ? '+' : ''}$${Math.abs(pnl).toFixed(0)}</span>` : '';
+    html += `<div class="${cls}" onclick="openDay(${day})"><span>${day}</span>${sub}</div>`;
+  }
+  document.getElementById('calGrid').innerHTML = html;
 }
 
-// ── INIT ──────────────────────────────────────────────────────────────────
-function initDashboard() {
-  buildChart(7);
-  renderTable();
+function openDay(day) {
+  const dt = trades.filter(t => { if (!t.closeTime) return false; const d = new Date(t.closeTime); return d.getFullYear() === calY && d.getMonth() === calM && d.getDate() === day; });
+  if (!dt.length) return;
+  const pnl = dt.reduce((s, t) => s + (t.pnl || 0), 0);
+  const mn = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
+  document.getElementById('modalTitle').textContent = `${day}. ${mn[calM]} ${calY}`;
+  document.getElementById('modalBody').innerHTML = `
+    <div class="flex gap-5 mb-4">
+      <div><p class="text-[10px] font-semibold uppercase tracking-widest text-[#6e6e73] mb-1">Trades</p><p class="text-[15px] font-semibold">${dt.length}</p></div>
+      <div><p class="text-[10px] font-semibold uppercase tracking-widest text-[#6e6e73] mb-1">PnL</p><p class="text-[15px] font-semibold ${pnl >= 0 ? 'text-[#34c759]' : 'text-[#ff3b30]'}">${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}</p></div>
+    </div>
+    ${dt.map(t => `<div class="border border-[#f0f0f0] dark:border-[#2c2c2e] rounded-xl px-3.5 py-2.5 mb-2">
+      <div class="flex justify-between items-center"><span class="font-semibold text-[14px]">${t.asset}</span><span class="font-semibold text-[13px] ${t.pnl >= 0 ? 'text-[#34c759]' : 'text-[#ff3b30]'}">${t.pnl >= 0 ? '+' : ''}$${t.pnl.toFixed(2)}</span></div>
+      <p class="text-[11px] text-[#6e6e73] mt-1">${t.direction} · Entry $${t.entry} · ${t.closeReason || '—'}</p>
+    </div>`).join('')}`;
+  document.getElementById('modal').classList.remove('hidden');
+}
+function closeModal() { document.getElementById('modal').classList.add('hidden'); }
+
+// ── POSITIONS ─────────────────────────────────────────────────────────────
+function renderPositions() {
+  const el = document.getElementById('positions');
+  document.getElementById('posCount').textContent = positions.length + ' offen';
+  if (!positions.length) { el.innerHTML = '<p class="text-[13px] text-[#6e6e73] py-4 text-center">Keine offenen Positionen</p>'; return; }
+  el.innerHTML = positions.map((p, i) => {
+    const upnl = parseFloat(p.unrealizedPL || 0);
+    const rl   = parseFloat(p.achievedProfits || 0);
+    const isL  = p.holdSide === 'long';
+    const t    = trades.find(t => t.asset === p.symbol.replace('USDT','') && t.status === 'open');
+    const tpStr = t?.targets?.length ? t.targets.map((tp, j) => `TP${j+1}: $${tp.price}`).join(' · ') : '—';
+    return `<div class="border border-[#f0f0f0] dark:border-[#2c2c2e] rounded-xl overflow-hidden mb-2" id="pi${i}">
+      <div class="flex justify-between items-center px-4 py-3 cursor-pointer hover:bg-[#f5f5f7] dark:hover:bg-[#2c2c2e]/40 transition" onclick="toggleItem('pi${i}')">
+        <div class="flex items-center gap-2.5">
+          <span class="font-semibold text-[14px]">${p.symbol}</span>
+          <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full ${isL ? 'bg-[#34c759]/10 text-[#34c759]' : 'bg-[#ff3b30]/10 text-[#ff3b30]'}">${isL ? 'Long' : 'Short'}</span>
+        </div>
+        <div class="flex items-center gap-2.5">
+          <span class="font-semibold text-[15px] ${upnl >= 0 ? 'text-[#34c759]' : 'text-[#ff3b30]'}">${upnl >= 0 ? '+' : ''}$${upnl.toFixed(2)}</span>
+          <svg class="chev w-3 h-3 text-[#6e6e73]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+      </div>
+      <div class="item-body border-t border-[#f0f0f0] dark:border-[#2c2c2e] px-4 py-3">
+        <div class="grid grid-cols-3 gap-3">
+          ${kv('Entry', '$' + parseFloat(p.openPriceAvg).toFixed(4))}
+          ${kv('Size', p.total)}
+          ${kv('Stop Loss', t?.stopLoss ? '$' + t.stopLoss : '—', 'text-[#ff3b30]')}
+          ${kv('Take Profits', tpStr, 'text-[11px]')}
+          ${kv('Unrealisiert', (upnl >= 0 ? '+' : '') + '$' + upnl.toFixed(2), upnl >= 0 ? 'text-[#34c759]' : 'text-[#ff3b30]')}
+          ${kv('Realisiert', (rl >= 0 ? '+' : '') + '$' + rl.toFixed(2), rl >= 0 ? 'text-[#34c759]' : 'text-[#ff3b30]')}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── HISTORY ───────────────────────────────────────────────────────────────
+function renderHistory() {
+  const open   = trades.filter(t => t.status === 'open');
+  const closed = trades.filter(t => t.status === 'closed').slice(-40).reverse();
+  const all    = [...open, ...closed];
+  document.getElementById('tradeCount').textContent = all.length + ' Trades';
+  const el = document.getElementById('history');
+  if (!all.length) { el.innerHTML = '<p class="text-[13px] text-[#6e6e73] py-4 text-center">Keine Trades</p>'; return; }
+
+  const edotCls = e => e.type.includes('TP') ? 'bg-[#34c759]' : e.type === 'SL' ? 'bg-[#ff3b30]' : e.type.includes('BE') ? 'bg-[#0071e3]' : 'bg-[#6e6e73]';
+  const statusLabel = t => t.status === 'open' ? ['Offen', 'text-[#ff9500]'] : t.pnl > 0 ? ['Win', 'text-[#34c759]'] : ['Loss', 'text-[#ff3b30]'];
+
+  el.innerHTML = all.map((t, i) => {
+    const [sl, sc] = statusLabel(t);
+    const evHtml = t.events?.length ? `
+      <div class="mt-3 pt-3 border-t border-[#f0f0f0] dark:border-[#2c2c2e]">
+        <p class="text-[10px] font-semibold uppercase tracking-widest text-[#6e6e73] mb-2">Events</p>
+        ${t.events.map(e => `<div class="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-[#f5f5f7] dark:bg-[#2c2c2e] mb-1.5 text-[11px]">
+          <span class="w-1.5 h-1.5 rounded-full flex-shrink-0 ${edotCls(e)}"></span>
+          <span class="font-semibold min-w-[90px]">${e.type}</span>
+          <span class="text-[#6e6e73] flex-1">@ $${e.price}</span>
+          <span class="font-semibold ${(e.pnl || 0) >= 0 ? 'text-[#34c759]' : 'text-[#ff3b30]'}">${(e.pnl || 0) >= 0 ? '+' : ''}$${(e.pnl || 0).toFixed(2)}</span>
+          <span class="text-[#6e6e73] text-[10px]">${new Date(e.time).toLocaleString('de-DE', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' })}</span>
+        </div>`).join('')}
+      </div>` : '';
+    return `<div class="border border-[#f0f0f0] dark:border-[#2c2c2e] rounded-xl overflow-hidden mb-2" id="ti${i}">
+      <div class="flex justify-between items-center px-4 py-3 cursor-pointer hover:bg-[#f5f5f7] dark:hover:bg-[#2c2c2e]/40 transition" onclick="toggleItem('ti${i}')">
+        <div class="flex items-center gap-2">
+          <span class="font-semibold text-[14px]">${t.asset}</span>
+          <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full ${t.direction==='Long'?'bg-[#34c759]/10 text-[#34c759]':'bg-[#ff3b30]/10 text-[#ff3b30]'}">${t.direction}</span>
+          <span class="text-[11px] font-semibold ${sc}">${sl}</span>
+        </div>
+        <div class="flex items-center gap-2.5">
+          <span class="font-semibold text-[13px] ${t.pnl >= 0 ? 'text-[#34c759]' : 'text-[#ff3b30]'}">${t.pnl >= 0 ? '+' : ''}$${t.pnl.toFixed(2)}</span>
+          <svg class="chev w-3 h-3 text-[#6e6e73]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+      </div>
+      <div class="item-body border-t border-[#f0f0f0] dark:border-[#2c2c2e] px-4 py-3">
+        <div class="grid grid-cols-3 gap-3">
+          ${kv('Entry', '$' + t.entry)}
+          ${kv('Stop Loss', '$' + t.stopLoss, 'text-[#ff3b30]')}
+          ${kv('Take Profits', t.targets?.map((tp,j)=>`TP${j+1}: $${tp.price}`).join('<br>') || '—')}
+          ${kv('PnL', (t.pnl>=0?'+':'')+'$'+t.pnl.toFixed(2), t.pnl>=0?'text-[#34c759]':'text-[#ff3b30]')}
+          ${kv('Geöffnet', new Date(t.openTime).toLocaleString('de-DE',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}))}
+          ${kv('Geschlossen', t.closeTime ? new Date(t.closeTime).toLocaleString('de-DE',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '—')}
+          ${t.closeReason ? kv('Grund', t.closeReason) : ''}
+        </div>
+        ${evHtml}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── AWARDS ────────────────────────────────────────────────────────────────
+function renderAwards() {
+  const closed = trades.filter(t => t.status === 'closed');
+  const el = document.getElementById('awards');
+  if (!closed.length) { el.innerHTML = '<p class="col-span-4 text-center text-[13px] text-[#6e6e73] py-4">Noch keine Trades</p>'; return; }
+  const sorted = [...closed].sort((a, b) => b.pnl - a.pnl);
+  const best = sorted[0], sec = sorted[1], worst = sorted[sorted.length - 1];
+  const avg  = closed.reduce((s, t) => s + t.pnl, 0) / closed.length;
+  el.innerHTML = [
+    best  ? awardCard('🥇', 'Bester Trade',    best.asset,  '+$'+best.pnl.toFixed(2),  'text-[#34c759]', best.direction, best.openTime) : '',
+    sec   ? awardCard('🥈', 'Zweitbester',     sec.asset,   '+$'+sec.pnl.toFixed(2),   'text-[#34c759]', sec.direction,  sec.openTime)  : '',
+    worst ? awardCard('📉', 'Größter Verlust', worst.asset, '$'+worst.pnl.toFixed(2), 'text-[#ff3b30]', worst.direction, worst.openTime) : '',
+    `<div class="bg-[#f5f5f7] dark:bg-[#2c2c2e] rounded-xl p-4">
+      <p class="text-[18px] mb-1">📊</p>
+      <p class="text-[10px] font-semibold uppercase tracking-widest text-[#6e6e73] mb-1">Ø PnL / Trade</p>
+      <p class="text-[18px] font-bold tracking-tight">${avg>=0?'+':''}$${avg.toFixed(2)}</p>
+      <p class="text-[11px] text-[#6e6e73] mt-1">${closed.length} Trades</p>
+    </div>`
+  ].join('');
+}
+
+function awardCard(icon, label, name, val, vc, dir, time) {
+  return `<div class="bg-[#f5f5f7] dark:bg-[#2c2c2e] rounded-xl p-4">
+    <p class="text-[18px] mb-1">${icon}</p>
+    <p class="text-[10px] font-semibold uppercase tracking-widest text-[#6e6e73] mb-1">${label}</p>
+    <p class="text-[16px] font-bold tracking-tight">${name}</p>
+    <p class="text-[14px] font-semibold ${vc}">${val}</p>
+    <p class="text-[11px] text-[#6e6e73] mt-1">${dir} · ${new Date(time).toLocaleDateString('de-DE')}</p>
+  </div>`;
+}
+
+// ── HELPERS ───────────────────────────────────────────────────────────────
+function kv(label, val, valCls = '') {
+  return `<div><p class="text-[10px] font-semibold uppercase tracking-widest text-[#6e6e73] mb-1">${label}</p><p class="text-[12px] font-semibold ${valCls}">${val}</p></div>`;
+}
+
+function toggleItem(id) {
+  document.getElementById(id).classList.toggle('item-open');
 }
 </script>
 </body>
