@@ -1,465 +1,442 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="de" class="dark">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Signal Bot</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
   <script>
     tailwind.config = {
       darkMode: 'class',
       theme: {
         extend: {
-          fontFamily: { sans: ['-apple-system','BlinkMacSystemFont','SF Pro Text','SF Pro Display','Helvetica Neue','sans-serif'] }
+          fontFamily: { sans: ['Inter', '-apple-system', 'sans-serif'] },
+          colors: {
+            bg:    { DEFAULT: '#0a0a0a', card: '#111111', hover: '#161616', border: '#1f1f1f' },
+            txt:   { primary: '#f0f0f0', secondary: '#666', muted: '#333' },
+            green: { DEFAULT: '#22c55e', dim: 'rgba(34,197,94,.08)' },
+            red:   { DEFAULT: '#ef4444', dim: 'rgba(239,68,68,.08)' },
+            blue:  { DEFAULT: '#3b82f6' },
+          },
         }
       }
     }
   </script>
   <style>
-    * { -webkit-font-smoothing: antialiased; }
-    .pulse { animation: pulse 2s ease-in-out infinite; }
-    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
-    .fade { animation: fade .3s ease; }
-    @keyframes fade { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:translateY(0)} }
-    .chev { transition: transform .22s ease; }
-    .item-open .chev { transform: rotate(180deg); }
-    .item-body { display: none; }
-    .item-open .item-body { display: block; }
+    * { -webkit-font-smoothing: antialiased; box-sizing: border-box; }
+    body { background: #0a0a0a; color: #f0f0f0; font-family: 'Inter', -apple-system, sans-serif; }
+    @keyframes in { from { opacity:0; transform:translateY(10px) } to { opacity:1; transform:translateY(0) } }
+    .in  { animation: in .4s ease forwards; }
+    @keyframes breathe { 0%,100%{opacity:1} 50%{opacity:.2} }
+    .breathe { animation: breathe 2.4s ease-in-out infinite; }
+    details summary { list-style:none; cursor:pointer; }
+    details summary::-webkit-details-marker { display:none; }
+    details[open] .chevron { transform: rotate(180deg); }
+    .chevron { transition: transform .2s ease; display:inline-block; }
+    ::-webkit-scrollbar { width:0; }
+    input:-webkit-autofill { -webkit-box-shadow: 0 0 0 100px #111 inset !important; -webkit-text-fill-color: #f0f0f0 !important; }
   </style>
 </head>
-<body class="bg-[#f5f5f7] dark:bg-black min-h-screen font-sans text-[#1d1d1f] dark:text-[#f5f5f7] transition-colors duration-200">
+<body class="min-h-screen">
 
-<!-- ── LOGIN ─────────────────────────────────────────────────────────────── -->
-<div id="loginScreen" class="min-h-screen flex items-center justify-center px-4">
-  <div class="w-full max-w-[340px] fade">
-    <div class="text-center mb-8">
-      <div class="w-14 h-14 rounded-[18px] bg-black dark:bg-white flex items-center justify-center mx-auto mb-5">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="stroke-white dark:stroke-black">
+<!-- ── LOGIN ─────────────────────────────────────────────────────────── -->
+<div id="loginWrap" class="min-h-screen flex items-center justify-center px-6">
+  <div class="w-full max-w-[320px] in">
+    <div class="mb-10 text-center">
+      <div class="inline-flex items-center justify-center w-10 h-10 rounded-2xl bg-[#111] border border-[#1f1f1f] mb-6">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f0f0f0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
           <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>
         </svg>
       </div>
-      <h1 class="text-[22px] font-semibold tracking-tight">Signal Bot</h1>
-      <p class="text-[14px] text-[#6e6e73] mt-1">Trading Dashboard</p>
+      <p class="text-[22px] font-semibold tracking-tight">Signal Bot</p>
+      <p class="text-[13px] text-[#555] mt-1">Trading Dashboard</p>
     </div>
-    <div class="bg-white dark:bg-[#1c1c1e] rounded-2xl shadow-sm overflow-hidden">
-      <div class="px-6 pt-6 pb-5">
-        <label class="block text-[11px] font-semibold uppercase tracking-widest text-[#6e6e73] mb-2">Password</label>
-        <input id="pw" type="password" placeholder="••••••••"
-          class="w-full px-4 py-2.5 text-[15px] rounded-xl border border-[#d2d2d7] dark:border-[#3a3a3c] bg-[#f5f5f7] dark:bg-[#2c2c2e] dark:text-white focus:outline-none focus:ring-2 focus:ring-black/10 dark:focus:ring-white/10 focus:border-black/20 transition" />
-        <p id="loginErr" class="text-[12px] text-[#ff3b30] mt-2 h-4"></p>
-      </div>
-      <div class="border-t border-[#f0f0f0] dark:border-[#2c2c2e]">
-        <button onclick="doLogin()" class="w-full py-3.5 text-[15px] font-medium text-[#0071e3] dark:text-[#0a84ff] hover:bg-[#f5f5f7] dark:hover:bg-[#2c2c2e] transition">Sign In</button>
-      </div>
-    </div>
+    <input id="pw" type="password" placeholder="Password"
+      class="w-full bg-[#111] border border-[#1f1f1f] rounded-xl px-4 py-3 text-[15px] text-[#f0f0f0] placeholder-[#333] outline-none focus:border-[#333] transition mb-2"/>
+    <p id="loginErr" class="text-[12px] text-red-500 mb-3 h-4"></p>
+    <button onclick="doLogin()" class="w-full bg-[#f0f0f0] text-[#0a0a0a] text-[14px] font-semibold rounded-xl py-3 hover:bg-white transition active:scale-[.98]">
+      Continue
+    </button>
   </div>
 </div>
 
-<!-- ── DASHBOARD ─────────────────────────────────────────────────────────── -->
-<div id="dash" class="hidden">
+<!-- ── APP ───────────────────────────────────────────────────────────── -->
+<div id="app" class="hidden min-h-screen">
 
-  <!-- Navbar -->
-  <nav class="bg-white/80 dark:bg-[#1c1c1e]/80 backdrop-blur-2xl border-b border-black/[.06] dark:border-white/[.08] sticky top-0 z-20">
-    <div class="max-w-5xl mx-auto px-6 h-[52px] flex items-center justify-between">
-      <span class="text-[15px] font-semibold tracking-tight">Signal Bot</span>
+  <!-- Nav -->
+  <nav class="sticky top-0 z-20 border-b border-[#1a1a1a]" style="background:rgba(10,10,10,.85);backdrop-filter:blur(24px)">
+    <div class="max-w-3xl mx-auto px-6 h-14 flex items-center justify-between">
+      <div class="flex items-center gap-2.5">
+        <span class="w-1.5 h-1.5 rounded-full bg-green-500 breathe"></span>
+        <span class="text-[14px] font-medium text-[#f0f0f0]">Signal Bot</span>
+      </div>
       <div class="flex items-center gap-5">
-        <span class="text-[11px] text-[#6e6e73]" id="lu"></span>
-        <div class="flex items-center gap-1.5">
-          <span class="w-2 h-2 rounded-full bg-[#34c759] pulse inline-block"></span>
-          <span class="text-[12px] text-[#6e6e73]">Live</span>
-        </div>
-        <button onclick="toggleDark()" class="text-[#6e6e73] hover:text-[#1d1d1f] dark:hover:text-white transition" title="Dark mode">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
-            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
-            <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
-            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
-          </svg>
-        </button>
-        <button onclick="doRefresh()" class="text-[13px] text-[#0071e3] dark:text-[#0a84ff] hover:underline">Refresh</button>
-        <button onclick="doLogout()" class="text-[13px] text-[#6e6e73] hover:underline">Sign Out</button>
+        <span class="text-[12px] text-[#444]" id="lastUpdate"></span>
+        <button onclick="loadAll()" class="text-[12px] text-[#555] hover:text-[#f0f0f0] transition">Refresh</button>
+        <button onclick="doLogout()" class="text-[12px] text-[#555] hover:text-[#f0f0f0] transition">Sign out</button>
       </div>
     </div>
   </nav>
 
-  <main class="max-w-5xl mx-auto px-6 py-7 space-y-3">
+  <main class="max-w-3xl mx-auto px-6 py-8 space-y-3">
 
-    <!-- Metrics -->
-    <div class="grid grid-cols-3 md:grid-cols-6 gap-3" id="metrics"></div>
+    <!-- Hero -->
+    <div class="rounded-2xl border border-[#1a1a1a] bg-[#0e0e0e] px-7 py-6">
+      <p class="text-[12px] text-[#444] uppercase tracking-widest font-medium mb-3">Realized P&L</p>
+      <p id="heroPnl" class="text-[48px] font-semibold tracking-tight leading-none mb-5">—</p>
+      <div class="grid grid-cols-4 gap-px bg-[#1a1a1a] rounded-xl overflow-hidden">
+        <div class="bg-[#0e0e0e] px-4 py-3"><p class="text-[11px] text-[#444] mb-1">Win Rate</p><p id="mWR"   class="text-[16px] font-semibold">—</p></div>
+        <div class="bg-[#0e0e0e] px-4 py-3"><p class="text-[11px] text-[#444] mb-1">Trades</p>  <p id="mTR"   class="text-[16px] font-semibold">—</p></div>
+        <div class="bg-[#0e0e0e] px-4 py-3"><p class="text-[11px] text-[#444] mb-1">Balance</p> <p id="mBAL"  class="text-[16px] font-semibold">—</p></div>
+        <div class="bg-[#0e0e0e] px-4 py-3"><p class="text-[11px] text-[#444] mb-1">Open</p>    <p id="mOPEN" class="text-[16px] font-semibold">—</p></div>
+      </div>
+    </div>
 
     <!-- Chart -->
-    <div class="bg-white dark:bg-[#1c1c1e] rounded-2xl px-5 py-4">
-      <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
-        <p class="text-[11px] font-semibold uppercase tracking-widest text-[#6e6e73]">Equity Kurve</p>
-        <div class="flex items-center gap-2">
-          <div class="flex gap-1" id="rangeBtns">
-            <button onclick="setDays('1',this)"  class="rng text-[11px] font-medium px-2.5 py-1 rounded-lg text-[#6e6e73] hover:bg-[#f5f5f7] dark:hover:bg-[#2c2c2e] transition">1D</button>
-            <button onclick="setDays('7',this)"  class="rng text-[11px] font-medium px-2.5 py-1 rounded-lg bg-black dark:bg-white text-white dark:text-black transition">7D</button>
-            <button onclick="setDays('30',this)" class="rng text-[11px] font-medium px-2.5 py-1 rounded-lg text-[#6e6e73] hover:bg-[#f5f5f7] dark:hover:bg-[#2c2c2e] transition">30D</button>
-            <button onclick="setDays('90',this)" class="rng text-[11px] font-medium px-2.5 py-1 rounded-lg text-[#6e6e73] hover:bg-[#f5f5f7] dark:hover:bg-[#2c2c2e] transition">90D</button>
+    <div class="rounded-2xl border border-[#1a1a1a] bg-[#0e0e0e] px-6 py-5">
+      <div class="flex items-center justify-between mb-5">
+        <p class="text-[13px] font-medium text-[#f0f0f0]">Equity Curve</p>
+        <div class="flex items-center gap-3">
+          <div class="flex gap-0.5" id="ctype">
+            <button onclick="setCtype('equity',this)" class="ctp text-[12px] px-3 py-1 rounded-lg bg-[#1a1a1a] text-[#f0f0f0] font-medium transition">Balance</button>
+            <button onclick="setCtype('upnl',this)"   class="ctp text-[12px] px-3 py-1 rounded-lg text-[#444] hover:text-[#999] transition">PnL</button>
           </div>
-          <div class="flex gap-1" id="ctypeBtns">
-            <button onclick="setCtype('equity',this)"  class="ctp text-[11px] font-medium px-2.5 py-1 rounded-lg bg-black dark:bg-white text-white dark:text-black transition">Balance</button>
-            <button onclick="setCtype('upnl',this)"    class="ctp text-[11px] font-medium px-2.5 py-1 rounded-lg text-[#6e6e73] hover:bg-[#f5f5f7] dark:hover:bg-[#2c2c2e] transition">Unreal. PnL</button>
+          <div class="flex gap-0.5" id="range">
+            <button onclick="setDays('1',this)"  class="rng text-[12px] px-3 py-1 rounded-lg text-[#444] hover:text-[#999] transition">1D</button>
+            <button onclick="setDays('7',this)"  class="rng text-[12px] px-3 py-1 rounded-lg bg-[#1a1a1a] text-[#f0f0f0] font-medium transition">7D</button>
+            <button onclick="setDays('30',this)" class="rng text-[12px] px-3 py-1 rounded-lg text-[#444] hover:text-[#999] transition">30D</button>
+            <button onclick="setDays('90',this)" class="rng text-[12px] px-3 py-1 rounded-lg text-[#444] hover:text-[#999] transition">90D</button>
           </div>
         </div>
       </div>
-      <div class="h-[180px]" id="chartWrap"><canvas id="eqChart"></canvas></div>
+      <div class="h-48" id="chartWrap"><canvas id="eqc"></canvas></div>
     </div>
 
     <!-- Calendar -->
-    <div class="bg-white dark:bg-[#1c1c1e] rounded-2xl px-5 py-4">
-      <div class="flex items-center justify-between mb-3">
-        <p class="text-[11px] font-semibold uppercase tracking-widest text-[#6e6e73]">Kalender</p>
-        <div class="flex items-center gap-2">
-          <button onclick="moveMonth(-1)" class="w-7 h-7 rounded-full border border-[#d2d2d7] dark:border-[#3a3a3c] text-[14px] flex items-center justify-center hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black transition">‹</button>
-          <span class="text-[13px] font-medium min-w-[130px] text-center" id="calLabel"></span>
-          <button onclick="moveMonth(1)"  class="w-7 h-7 rounded-full border border-[#d2d2d7] dark:border-[#3a3a3c] text-[14px] flex items-center justify-center hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black transition">›</button>
+    <div class="rounded-2xl border border-[#1a1a1a] bg-[#0e0e0e] px-6 py-5">
+      <div class="flex items-center justify-between mb-5">
+        <p class="text-[13px] font-medium" id="calLabel"></p>
+        <div class="flex gap-1">
+          <button onclick="moveMonth(-1)" class="w-7 h-7 rounded-lg bg-[#161616] text-[#666] hover:text-[#f0f0f0] text-[15px] flex items-center justify-center transition">‹</button>
+          <button onclick="moveMonth(1)"  class="w-7 h-7 rounded-lg bg-[#161616] text-[#666] hover:text-[#f0f0f0] text-[15px] flex items-center justify-center transition">›</button>
         </div>
+      </div>
+      <div class="grid grid-cols-7 gap-1 mb-2">
+        <span class="text-[10px] text-[#333] text-center font-medium py-1">Mo</span>
+        <span class="text-[10px] text-[#333] text-center font-medium py-1">Di</span>
+        <span class="text-[10px] text-[#333] text-center font-medium py-1">Mi</span>
+        <span class="text-[10px] text-[#333] text-center font-medium py-1">Do</span>
+        <span class="text-[10px] text-[#333] text-center font-medium py-1">Fr</span>
+        <span class="text-[10px] text-[#333] text-center font-medium py-1">Sa</span>
+        <span class="text-[10px] text-[#333] text-center font-medium py-1">So</span>
       </div>
       <div class="grid grid-cols-7 gap-1" id="calGrid"></div>
     </div>
 
-    <!-- Open Positions -->
-    <div class="bg-white dark:bg-[#1c1c1e] rounded-2xl px-5 py-4">
-      <div class="flex items-center justify-between mb-3">
-        <p class="text-[11px] font-semibold uppercase tracking-widest text-[#6e6e73]">Offene Positionen</p>
-        <span class="text-[12px] text-[#6e6e73]" id="posCount"></span>
+    <!-- Positions -->
+    <div class="rounded-2xl border border-[#1a1a1a] bg-[#0e0e0e] overflow-hidden">
+      <div class="px-6 py-4 flex items-center justify-between border-b border-[#1a1a1a]">
+        <p class="text-[13px] font-medium">Open Positions</p>
+        <span class="text-[12px] text-[#444]" id="posCount"></span>
       </div>
       <div id="positions"></div>
     </div>
 
-    <!-- Trade History -->
-    <div class="bg-white dark:bg-[#1c1c1e] rounded-2xl px-5 py-4">
-      <div class="flex items-center justify-between mb-3">
-        <p class="text-[11px] font-semibold uppercase tracking-widest text-[#6e6e73]">Trade History</p>
-        <span class="text-[12px] text-[#6e6e73]" id="tradeCount"></span>
+    <!-- History -->
+    <div class="rounded-2xl border border-[#1a1a1a] bg-[#0e0e0e] overflow-hidden">
+      <div class="px-6 py-4 flex items-center justify-between border-b border-[#1a1a1a]">
+        <p class="text-[13px] font-medium">Trade History</p>
+        <span class="text-[12px] text-[#444]" id="tradeCount"></span>
       </div>
       <div id="history"></div>
     </div>
 
     <!-- Awards -->
-    <div class="bg-white dark:bg-[#1c1c1e] rounded-2xl px-5 py-4">
-      <p class="text-[11px] font-semibold uppercase tracking-widest text-[#6e6e73] mb-4">Best & Worst</p>
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-3" id="awards"></div>
+    <div class="rounded-2xl border border-[#1a1a1a] bg-[#0e0e0e] px-6 py-5">
+      <p class="text-[13px] font-medium mb-5">Highlights</p>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-2" id="awards"></div>
     </div>
 
   </main>
 </div>
 
-<!-- Day Modal -->
-<div id="modal" class="hidden fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center px-4" onclick="if(event.target===this)closeModal()">
-  <div class="bg-white dark:bg-[#1c1c1e] rounded-2xl p-6 w-full max-w-sm shadow-xl fade">
-    <div class="flex justify-between items-center mb-4">
+<!-- Modal -->
+<div id="modal" class="hidden fixed inset-0 z-50 flex items-end md:items-center justify-center px-4 pb-6 md:pb-0">
+  <div class="absolute inset-0" style="background:rgba(0,0,0,.7);backdrop-filter:blur(8px)" onclick="closeModal()"></div>
+  <div class="relative w-full max-w-sm rounded-2xl border border-[#1f1f1f] bg-[#111] p-6 in">
+    <div class="flex items-center justify-between mb-5">
       <p class="text-[15px] font-semibold" id="modalTitle"></p>
-      <button onclick="closeModal()" class="w-7 h-7 rounded-full bg-[#f5f5f7] dark:bg-[#2c2c2e] text-[#6e6e73] hover:bg-[#ff3b30] hover:text-white text-[12px] flex items-center justify-center transition">✕</button>
+      <button onclick="closeModal()" class="w-7 h-7 rounded-lg bg-[#1a1a1a] text-[#555] hover:text-[#f0f0f0] text-[12px] flex items-center justify-center transition">✕</button>
     </div>
     <div id="modalBody"></div>
   </div>
 </div>
 
 <script>
-// ── CONFIG ────────────────────────────────────────────────────────────────
-const PASSWORD = "signal2024"; // change this
+const PASSWORD = "signal2024";
+let trades=[], positions=[], balance={}, stats={}, equity=[];
+let days='7', ctype='equity', chart=null;
+let calY=new Date().getFullYear(), calM=new Date().getMonth();
 
-// ── STATE ─────────────────────────────────────────────────────────────────
-let trades = [], positions = [], balance = {}, stats = {}, equity = [];
-let days = '7', ctype = 'equity', chart = null;
-let calY = new Date().getFullYear(), calM = new Date().getMonth();
-
-// ── AUTH ──────────────────────────────────────────────────────────────────
-function doLogin() {
-  if (document.getElementById('pw').value === PASSWORD) {
-    document.getElementById('loginScreen').classList.add('hidden');
-    document.getElementById('dash').classList.remove('hidden');
-    document.getElementById('loginErr').textContent = '';
-    loadData();
-    setInterval(loadData, 30000);
+// ── AUTH
+function doLogin(){
+  if(document.getElementById('pw').value===PASSWORD){
+    document.getElementById('loginWrap').classList.add('hidden');
+    document.getElementById('app').classList.remove('hidden');
+    document.getElementById('loginErr').textContent='';
+    loadAll();
+    setInterval(loadAll,30000);
   } else {
-    document.getElementById('loginErr').textContent = 'Incorrect password.';
+    document.getElementById('loginErr').textContent='Incorrect password.';
   }
 }
-document.getElementById('pw').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
-
-function doLogout() {
-  document.getElementById('dash').classList.add('hidden');
-  document.getElementById('loginScreen').classList.remove('hidden');
-  document.getElementById('pw').value = '';
+document.getElementById('pw').addEventListener('keydown',e=>{ if(e.key==='Enter') doLogin(); });
+function doLogout(){
+  document.getElementById('app').classList.add('hidden');
+  document.getElementById('loginWrap').classList.remove('hidden');
+  document.getElementById('pw').value='';
 }
 
-function doRefresh() { loadData(); }
-
-function toggleDark() {
-  document.documentElement.classList.toggle('dark');
-  if (chart) { chart.destroy(); chart = null; renderChart(); }
-}
-
-// ── DATA ──────────────────────────────────────────────────────────────────
-async function loadData() {
+// ── FETCH
+async function loadAll(){
   try {
-    const [s, p, t, b, e] = await Promise.all([
-      fetch('/api/stats').then(r => r.json()),
-      fetch('/api/positions').then(r => r.json()),
-      fetch('/api/trades').then(r => r.json()),
-      fetch('/api/balance').then(r => r.json()),
-      fetch(`/api/equity?days=${days}`).then(r => r.json()),
+    const [s,p,t,b,e]=await Promise.all([
+      fetch('/api/stats').then(r=>r.json()),
+      fetch('/api/positions').then(r=>r.json()),
+      fetch('/api/trades').then(r=>r.json()),
+      fetch('/api/balance').then(r=>r.json()),
+      fetch(`/api/equity?days=${days}`).then(r=>r.json()),
     ]);
-    stats = s; positions = p; trades = t; balance = b; equity = e;
-    document.getElementById('lu').textContent = new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-    renderMetrics(); renderChart(); renderCal(); renderPositions(); renderHistory(); renderAwards();
-  } catch (err) { console.error('Load error:', err); }
+    stats=s; positions=p; trades=t; balance=b; equity=e;
+    document.getElementById('lastUpdate').textContent=new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
+    renderHero(); buildChart(); renderCal(); renderPositions(); renderHistory(); renderAwards();
+  } catch(err){ console.error(err); }
 }
 
-// ── METRICS ───────────────────────────────────────────────────────────────
-function renderMetrics() {
-  const upnl = positions.reduce((s, p) => s + parseFloat(p.unrealizedPL || 0), 0);
-  const bal  = parseFloat(balance.accountEquity || 0);
-  const rpnl = parseFloat(stats.totalPnl || 0);
-  const avail = parseFloat(balance.available || 0);
-  const items = [
-    { label: 'Balance',        val: '$' + bal.toFixed(2),                        sub: 'Verf. $' + avail.toFixed(2),            color: 'text-[#1d1d1f] dark:text-[#f5f5f7]' },
-    { label: 'Unrealis. PnL',  val: (upnl >= 0 ? '+' : '') + '$' + upnl.toFixed(2), sub: '',                                   color: upnl >= 0 ? 'text-[#34c759]' : 'text-[#ff3b30]' },
-    { label: 'Realis. PnL',    val: (rpnl >= 0 ? '+' : '') + '$' + rpnl.toFixed(2), sub: '',                                   color: rpnl >= 0 ? 'text-[#34c759]' : 'text-[#ff3b30]' },
-    { label: 'Win Rate',       val: stats.total > 0 ? stats.rate + '%' : '—',    sub: (stats.wins || 0) + 'W / ' + (stats.losses || 0) + 'L', color: 'text-[#1d1d1f] dark:text-[#f5f5f7]' },
-    { label: 'Trades',         val: stats.total || 0,                             sub: '',                                      color: 'text-[#1d1d1f] dark:text-[#f5f5f7]' },
-    { label: 'Offen',          val: positions.length,                             sub: '',                                      color: 'text-[#1d1d1f] dark:text-[#f5f5f7]' },
-  ];
-  document.getElementById('metrics').innerHTML = items.map(m => `
-    <div class="bg-white dark:bg-[#1c1c1e] rounded-2xl px-4 py-3.5">
-      <p class="text-[10px] font-semibold uppercase tracking-widest text-[#6e6e73] mb-1.5">${m.label}</p>
-      <p class="text-[18px] font-semibold tracking-tight ${m.color}">${m.val}</p>
-      ${m.sub ? `<p class="text-[11px] text-[#6e6e73] mt-0.5">${m.sub}</p>` : ''}
-    </div>`).join('');
+// ── HERO
+function renderHero(){
+  const rpnl=parseFloat(stats.totalPnl||0);
+  const upnl=positions.reduce((s,p)=>s+parseFloat(p.unrealizedPL||0),0);
+  const bal=parseFloat(balance.accountEquity||0);
+  const hp=document.getElementById('heroPnl');
+  hp.textContent=(rpnl>=0?'+':'')+fmt(rpnl);
+  hp.className='text-[48px] font-semibold tracking-tight leading-none mb-5 '+(rpnl>=0?'text-green-500':'text-red-500');
+  document.getElementById('mWR').textContent=stats.total>0?stats.rate+'%':'—';
+  document.getElementById('mTR').textContent=(stats.wins||0)+'W · '+(stats.losses||0)+'L';
+  document.getElementById('mBAL').textContent=fmt(bal);
+  document.getElementById('mOPEN').textContent=positions.length;
 }
 
-// ── CHART ─────────────────────────────────────────────────────────────────
-function setDays(d, btn) {
-  days = d;
-  document.querySelectorAll('.rng').forEach(b => b.className = b === btn
-    ? 'rng text-[11px] font-medium px-2.5 py-1 rounded-lg bg-black dark:bg-white text-white dark:text-black transition'
-    : 'rng text-[11px] font-medium px-2.5 py-1 rounded-lg text-[#6e6e73] hover:bg-[#f5f5f7] dark:hover:bg-[#2c2c2e] transition');
-  fetch(`/api/equity?days=${days}`).then(r => r.json()).then(e => { equity = e; if (chart) { chart.destroy(); chart = null; } renderChart(); });
+// ── CHART
+function setDays(d,btn){
+  days=d;
+  toggle('.rng',btn);
+  fetch(`/api/equity?days=${days}`).then(r=>r.json()).then(e=>{ equity=e; rebuildChart(); });
 }
-
-function setCtype(t, btn) {
-  ctype = t;
-  document.querySelectorAll('.ctp').forEach(b => b.className = b === btn
-    ? 'ctp text-[11px] font-medium px-2.5 py-1 rounded-lg bg-black dark:bg-white text-white dark:text-black transition'
-    : 'ctp text-[11px] font-medium px-2.5 py-1 rounded-lg text-[#6e6e73] hover:bg-[#f5f5f7] dark:hover:bg-[#2c2c2e] transition');
-  if (chart) { chart.destroy(); chart = null; }
-  renderChart();
-}
-
-function renderChart() {
-  const wrap = document.getElementById('chartWrap');
-  if (!equity || equity.length < 2) {
-    wrap.innerHTML = '<div class="h-full flex items-center justify-center text-[13px] text-[#6e6e73]">Wird aufgebaut... (Snapshots alle 30 Min)</div>';
+function setCtype(t,btn){ ctype=t; toggle('.ctp',btn); rebuildChart(); }
+function rebuildChart(){ if(chart){chart.destroy();chart=null;} buildChart(); }
+function buildChart(){
+  const wrap=document.getElementById('chartWrap');
+  if(!equity||equity.length<2){
+    wrap.innerHTML='<div class="h-full flex items-center justify-center text-[13px] text-[#333]">No data yet</div>';
     return;
   }
-  wrap.innerHTML = '<canvas id="eqChart"></canvas>';
-  const data   = equity.map(e => ctype === 'equity' ? e.equity : e.upnl);
-  const labels = equity.map(e => new Date(e.time).toLocaleString('de-DE', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }));
-  const up     = data[data.length - 1] >= data[0];
-  const lc     = up ? '#34c759' : '#ff3b30';
-  const isDark = document.documentElement.classList.contains('dark');
-  const ctx    = document.getElementById('eqChart').getContext('2d');
-  const grad   = ctx.createLinearGradient(0, 0, 0, 180);
-  grad.addColorStop(0, up ? 'rgba(52,199,89,.14)' : 'rgba(255,59,48,.1)');
-  grad.addColorStop(1, 'rgba(0,0,0,0)');
-  chart = new Chart(ctx, {
-    type: 'line',
-    data: { labels, datasets: [{ data, borderColor: lc, backgroundColor: grad, borderWidth: 1.8, fill: true, tension: 0.4, pointRadius: data.length > 30 ? 0 : 3, pointHoverRadius: 5, pointBackgroundColor: lc, pointBorderColor: isDark ? '#1c1c1e' : '#fff', pointBorderWidth: 2 }] },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false }, tooltip: { backgroundColor: isDark ? '#2c2c2e' : '#fff', titleColor: isDark ? '#f5f5f7' : '#1d1d1f', bodyColor: lc, borderColor: isDark ? '#3a3a3c' : '#e5e5ea', borderWidth: 1, padding: 10, cornerRadius: 10, callbacks: { label: c => ' $' + c.raw } } },
-      scales: {
-        x: { grid: { display: false }, border: { display: false }, ticks: { color: '#6e6e73', font: { size: 10 }, maxTicksLimit: 6 } },
-        y: { grid: { color: isDark ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.04)' }, border: { display: false }, ticks: { color: '#6e6e73', font: { size: 10 }, callback: v => '$' + v } }
-      },
-      interaction: { intersect: false, mode: 'index' }
+  wrap.innerHTML='<canvas id="eqc"></canvas>';
+  const data=equity.map(e=>ctype==='equity'?e.equity:e.upnl);
+  const labels=equity.map(e=>new Date(e.time).toLocaleString('de-DE',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}));
+  const up=data[data.length-1]>=data[0];
+  const col=up?'#22c55e':'#ef4444';
+  const ctx=document.getElementById('eqc').getContext('2d');
+  const g=ctx.createLinearGradient(0,0,0,192);
+  g.addColorStop(0,up?'rgba(34,197,94,.1)':'rgba(239,68,68,.08)');
+  g.addColorStop(1,'rgba(0,0,0,0)');
+  chart=new Chart(ctx,{
+    type:'line',
+    data:{labels,datasets:[{data,borderColor:col,backgroundColor:g,borderWidth:1.5,fill:true,tension:.4,
+      pointRadius:data.length>30?0:3,pointHoverRadius:5,pointBackgroundColor:col,
+      pointBorderColor:'#0e0e0e',pointBorderWidth:2}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{backgroundColor:'#161616',titleColor:'#999',bodyColor:col,
+        borderColor:'#2a2a2a',borderWidth:1,padding:10,cornerRadius:10,
+        callbacks:{label:c=>' $'+c.raw}}},
+      scales:{
+        x:{grid:{display:false},border:{display:false},ticks:{color:'#333',font:{size:10},maxTicksLimit:6}},
+        y:{grid:{color:'rgba(255,255,255,.03)'},border:{display:false},
+          ticks:{color:'#333',font:{size:10},callback:v=>'$'+v}}
+      },interaction:{intersect:false,mode:'index'}
     }
   });
 }
 
-// ── CALENDAR ──────────────────────────────────────────────────────────────
-function moveMonth(d) { calM += d; if (calM < 0) { calM = 11; calY--; } if (calM > 11) { calM = 0; calY++; } renderCal(); }
-
-function renderCal() {
-  const mn = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
-  document.getElementById('calLabel').textContent = mn[calM] + ' ' + calY;
-  const dm = {};
-  for (const t of trades) {
-    if (t.status !== 'closed' || !t.closeTime) continue;
-    const d = new Date(t.closeTime);
-    if (d.getFullYear() !== calY || d.getMonth() !== calM) continue;
-    dm[d.getDate()] = (dm[d.getDate()] || 0) + (t.pnl || 0);
+// ── CALENDAR
+function moveMonth(d){ calM+=d; if(calM<0){calM=11;calY--;} if(calM>11){calM=0;calY++;} renderCal(); }
+function renderCal(){
+  const mn=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  document.getElementById('calLabel').textContent=mn[calM]+' '+calY;
+  const dm={};
+  for(const t of trades){
+    if(t.status!=='closed'||!t.closeTime)continue;
+    const d=new Date(t.closeTime);
+    if(d.getFullYear()!==calY||d.getMonth()!==calM)continue;
+    dm[d.getDate()]=(dm[d.getDate()]||0)+(t.pnl||0);
   }
-  const first = new Date(calY, calM, 1).getDay();
-  const dim   = new Date(calY, calM + 1, 0).getDate();
-  const off   = first === 0 ? 6 : first - 1;
-  const today = new Date();
-  const isCur = today.getFullYear() === calY && today.getMonth() === calM;
-  let html = ['Mo','Di','Mi','Do','Fr','Sa','So'].map(d => `<div class="text-center text-[10px] font-semibold text-[#6e6e73] py-1">${d}</div>`).join('');
-  for (let i = 0; i < off; i++) html += '<div></div>';
-  for (let day = 1; day <= dim; day++) {
-    const pnl = dm[day];
-    const isT = isCur && today.getDate() === day;
-    let cls = 'aspect-square rounded-xl flex flex-col items-center justify-center text-[12px] font-semibold cursor-pointer transition hover:scale-105';
-    if (isT)            cls += ' ring-1 ring-[#0071e3]';
-    if (pnl !== undefined) cls += pnl >= 0 ? ' bg-[#34c759]/10 hover:bg-[#34c759]/18' : ' bg-[#ff3b30]/8 hover:bg-[#ff3b30]/14';
-    const sub = pnl !== undefined ? `<span class="text-[9px] font-bold ${pnl >= 0 ? 'text-[#34c759]' : 'text-[#ff3b30]'}">${pnl >= 0 ? '+' : ''}$${Math.abs(pnl).toFixed(0)}</span>` : '';
-    html += `<div class="${cls}" onclick="openDay(${day})"><span>${day}</span>${sub}</div>`;
+  const first=new Date(calY,calM,1).getDay();
+  const dim=new Date(calY,calM+1,0).getDate();
+  const off=first===0?6:first-1;
+  const today=new Date(), isCur=today.getFullYear()===calY&&today.getMonth()===calM;
+  let html='';
+  for(let i=0;i<off;i++) html+='<div></div>';
+  for(let day=1;day<=dim;day++){
+    const pnl=dm[day], isT=isCur&&today.getDate()===day;
+    let cls='aspect-square rounded-xl flex flex-col items-center justify-center cursor-pointer transition hover:bg-[#161616] ';
+    if(isT) cls+='ring-1 ring-[#333] ';
+    if(pnl!==undefined) cls+= pnl>=0?'bg-green-500/[.07] hover:bg-green-500/10':'bg-red-500/[.06] hover:bg-red-500/10';
+    const sub=pnl!==undefined?`<span class="text-[9px] font-semibold ${pnl>=0?'text-green-500':'text-red-500'} leading-none mt-0.5">${pnl>=0?'+':''}$${Math.abs(pnl).toFixed(0)}</span>`:'';
+    html+=`<div class="${cls}" onclick="openDay(${day})"><span class="text-[12px] font-medium text-[#888]">${day}</span>${sub}</div>`;
   }
-  document.getElementById('calGrid').innerHTML = html;
+  document.getElementById('calGrid').innerHTML=html;
 }
-
-function openDay(day) {
-  const dt = trades.filter(t => { if (!t.closeTime) return false; const d = new Date(t.closeTime); return d.getFullYear() === calY && d.getMonth() === calM && d.getDate() === day; });
-  if (!dt.length) return;
-  const pnl = dt.reduce((s, t) => s + (t.pnl || 0), 0);
-  const mn = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
-  document.getElementById('modalTitle').textContent = `${day}. ${mn[calM]} ${calY}`;
-  document.getElementById('modalBody').innerHTML = `
-    <div class="flex gap-5 mb-4">
-      <div><p class="text-[10px] font-semibold uppercase tracking-widest text-[#6e6e73] mb-1">Trades</p><p class="text-[15px] font-semibold">${dt.length}</p></div>
-      <div><p class="text-[10px] font-semibold uppercase tracking-widest text-[#6e6e73] mb-1">PnL</p><p class="text-[15px] font-semibold ${pnl >= 0 ? 'text-[#34c759]' : 'text-[#ff3b30]'}">${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}</p></div>
+function openDay(day){
+  const dt=trades.filter(t=>{if(!t.closeTime)return false;const d=new Date(t.closeTime);return d.getFullYear()===calY&&d.getMonth()===calM&&d.getDate()===day;});
+  if(!dt.length)return;
+  const pnl=dt.reduce((s,t)=>s+(t.pnl||0),0);
+  const mn=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  document.getElementById('modalTitle').textContent=`${day} ${mn[calM]} ${calY}`;
+  document.getElementById('modalBody').innerHTML=`
+    <div class="flex gap-6 mb-5 p-4 rounded-xl bg-[#161616]">
+      <div><p class="text-[11px] text-[#444] mb-1">Trades</p><p class="text-[18px] font-semibold">${dt.length}</p></div>
+      <div><p class="text-[11px] text-[#444] mb-1">P&L</p><p class="text-[18px] font-semibold ${pnl>=0?'text-green-500':'text-red-500'}">${pnl>=0?'+':''}${fmt(pnl)}</p></div>
     </div>
-    ${dt.map(t => `<div class="border border-[#f0f0f0] dark:border-[#2c2c2e] rounded-xl px-3.5 py-2.5 mb-2">
-      <div class="flex justify-between items-center"><span class="font-semibold text-[14px]">${t.asset}</span><span class="font-semibold text-[13px] ${t.pnl >= 0 ? 'text-[#34c759]' : 'text-[#ff3b30]'}">${t.pnl >= 0 ? '+' : ''}$${t.pnl.toFixed(2)}</span></div>
-      <p class="text-[11px] text-[#6e6e73] mt-1">${t.direction} · Entry $${t.entry} · ${t.closeReason || '—'}</p>
+    ${dt.map(t=>`<div class="flex justify-between items-center py-3 border-b border-[#1a1a1a] last:border-0">
+      <div><p class="text-[14px] font-medium">${t.asset}</p><p class="text-[12px] text-[#444] mt-0.5">${t.direction} · $${t.entry} · ${t.closeReason||'—'}</p></div>
+      <p class="text-[14px] font-semibold ${t.pnl>=0?'text-green-500':'text-red-500'}">${t.pnl>=0?'+':''}${fmt(t.pnl)}</p>
     </div>`).join('')}`;
   document.getElementById('modal').classList.remove('hidden');
 }
-function closeModal() { document.getElementById('modal').classList.add('hidden'); }
+function closeModal(){ document.getElementById('modal').classList.add('hidden'); }
 
-// ── POSITIONS ─────────────────────────────────────────────────────────────
-function renderPositions() {
-  const el = document.getElementById('positions');
-  document.getElementById('posCount').textContent = positions.length + ' offen';
-  if (!positions.length) { el.innerHTML = '<p class="text-[13px] text-[#6e6e73] py-4 text-center">Keine offenen Positionen</p>'; return; }
-  el.innerHTML = positions.map((p, i) => {
-    const upnl = parseFloat(p.unrealizedPL || 0);
-    const rl   = parseFloat(p.achievedProfits || 0);
-    const isL  = p.holdSide === 'long';
-    const t    = trades.find(t => t.asset === p.symbol.replace('USDT','') && t.status === 'open');
-    const tpStr = t?.targets?.length ? t.targets.map((tp, j) => `TP${j+1}: $${tp.price}`).join(' · ') : '—';
-    return `<div class="border border-[#f0f0f0] dark:border-[#2c2c2e] rounded-xl overflow-hidden mb-2" id="pi${i}">
-      <div class="flex justify-between items-center px-4 py-3 cursor-pointer hover:bg-[#f5f5f7] dark:hover:bg-[#2c2c2e]/40 transition" onclick="toggleItem('pi${i}')">
-        <div class="flex items-center gap-2.5">
-          <span class="font-semibold text-[14px]">${p.symbol}</span>
-          <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full ${isL ? 'bg-[#34c759]/10 text-[#34c759]' : 'bg-[#ff3b30]/10 text-[#ff3b30]'}">${isL ? 'Long' : 'Short'}</span>
+// ── POSITIONS
+function renderPositions(){
+  document.getElementById('posCount').textContent=positions.length+' open';
+  if(!positions.length){ document.getElementById('positions').innerHTML=empty('No open positions'); return; }
+  document.getElementById('positions').innerHTML=positions.map((p,i)=>{
+    const upnl=parseFloat(p.unrealizedPL||0), rl=parseFloat(p.achievedProfits||0);
+    const isL=p.holdSide==='long';
+    const t=trades.find(t=>t.asset===p.symbol.replace('USDT','')&&t.status==='open');
+    const tpStr=t?.targets?.length?t.targets.map((tp,j)=>`TP${j+1} $${tp.price}`).join(' · '):'—';
+    return `<details>
+      <summary class="flex items-center justify-between px-6 py-4 hover:bg-[#111] transition border-b border-[#1a1a1a]">
+        <div class="flex items-center gap-3">
+          <span class="text-[14px] font-medium">${p.symbol}</span>
+          <span class="text-[11px] font-medium px-2 py-0.5 rounded-md ${isL?'text-green-500 bg-green-500/10':'text-red-500 bg-red-500/10'}">${isL?'Long':'Short'}</span>
         </div>
-        <div class="flex items-center gap-2.5">
-          <span class="font-semibold text-[15px] ${upnl >= 0 ? 'text-[#34c759]' : 'text-[#ff3b30]'}">${upnl >= 0 ? '+' : ''}$${upnl.toFixed(2)}</span>
-          <svg class="chev w-3 h-3 text-[#6e6e73]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+        <div class="flex items-center gap-3">
+          <span class="text-[15px] font-semibold ${upnl>=0?'text-green-500':'text-red-500'}">${upnl>=0?'+':''}${fmt(upnl)}</span>
+          <svg class="chevron w-3.5 h-3.5 text-[#333]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
         </div>
+      </summary>
+      <div class="px-6 pb-5 pt-4 grid grid-cols-3 gap-4 bg-[#0a0a0a] border-b border-[#1a1a1a]">
+        ${kv('Entry','$'+parseFloat(p.openPriceAvg).toFixed(4))}
+        ${kv('Size',p.total)}
+        ${kv('Stop Loss',t?.stopLoss?'$'+t.stopLoss:'—','text-red-500')}
+        ${kv('Take Profits',tpStr)}
+        ${kv('Unrealized',(upnl>=0?'+':'')+fmt(upnl),upnl>=0?'text-green-500':'text-red-500')}
+        ${kv('Realized',(rl>=0?'+':'')+fmt(rl),rl>=0?'text-green-500':'text-red-500')}
       </div>
-      <div class="item-body border-t border-[#f0f0f0] dark:border-[#2c2c2e] px-4 py-3">
-        <div class="grid grid-cols-3 gap-3">
-          ${kv('Entry', '$' + parseFloat(p.openPriceAvg).toFixed(4))}
-          ${kv('Size', p.total)}
-          ${kv('Stop Loss', t?.stopLoss ? '$' + t.stopLoss : '—', 'text-[#ff3b30]')}
-          ${kv('Take Profits', tpStr, 'text-[11px]')}
-          ${kv('Unrealisiert', (upnl >= 0 ? '+' : '') + '$' + upnl.toFixed(2), upnl >= 0 ? 'text-[#34c759]' : 'text-[#ff3b30]')}
-          ${kv('Realisiert', (rl >= 0 ? '+' : '') + '$' + rl.toFixed(2), rl >= 0 ? 'text-[#34c759]' : 'text-[#ff3b30]')}
-        </div>
-      </div>
-    </div>`;
+    </details>`;
   }).join('');
 }
 
-// ── HISTORY ───────────────────────────────────────────────────────────────
-function renderHistory() {
-  const open   = trades.filter(t => t.status === 'open');
-  const closed = trades.filter(t => t.status === 'closed').slice(-40).reverse();
-  const all    = [...open, ...closed];
-  document.getElementById('tradeCount').textContent = all.length + ' Trades';
-  const el = document.getElementById('history');
-  if (!all.length) { el.innerHTML = '<p class="text-[13px] text-[#6e6e73] py-4 text-center">Keine Trades</p>'; return; }
-
-  const edotCls = e => e.type.includes('TP') ? 'bg-[#34c759]' : e.type === 'SL' ? 'bg-[#ff3b30]' : e.type.includes('BE') ? 'bg-[#0071e3]' : 'bg-[#6e6e73]';
-  const statusLabel = t => t.status === 'open' ? ['Offen', 'text-[#ff9500]'] : t.pnl > 0 ? ['Win', 'text-[#34c759]'] : ['Loss', 'text-[#ff3b30]'];
-
-  el.innerHTML = all.map((t, i) => {
-    const [sl, sc] = statusLabel(t);
-    const evHtml = t.events?.length ? `
-      <div class="mt-3 pt-3 border-t border-[#f0f0f0] dark:border-[#2c2c2e]">
-        <p class="text-[10px] font-semibold uppercase tracking-widest text-[#6e6e73] mb-2">Events</p>
-        ${t.events.map(e => `<div class="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-[#f5f5f7] dark:bg-[#2c2c2e] mb-1.5 text-[11px]">
-          <span class="w-1.5 h-1.5 rounded-full flex-shrink-0 ${edotCls(e)}"></span>
-          <span class="font-semibold min-w-[90px]">${e.type}</span>
-          <span class="text-[#6e6e73] flex-1">@ $${e.price}</span>
-          <span class="font-semibold ${(e.pnl || 0) >= 0 ? 'text-[#34c759]' : 'text-[#ff3b30]'}">${(e.pnl || 0) >= 0 ? '+' : ''}$${(e.pnl || 0).toFixed(2)}</span>
-          <span class="text-[#6e6e73] text-[10px]">${new Date(e.time).toLocaleString('de-DE', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' })}</span>
-        </div>`).join('')}
-      </div>` : '';
-    return `<div class="border border-[#f0f0f0] dark:border-[#2c2c2e] rounded-xl overflow-hidden mb-2" id="ti${i}">
-      <div class="flex justify-between items-center px-4 py-3 cursor-pointer hover:bg-[#f5f5f7] dark:hover:bg-[#2c2c2e]/40 transition" onclick="toggleItem('ti${i}')">
-        <div class="flex items-center gap-2">
-          <span class="font-semibold text-[14px]">${t.asset}</span>
-          <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full ${t.direction==='Long'?'bg-[#34c759]/10 text-[#34c759]':'bg-[#ff3b30]/10 text-[#ff3b30]'}">${t.direction}</span>
-          <span class="text-[11px] font-semibold ${sc}">${sl}</span>
-        </div>
+// ── HISTORY
+function renderHistory(){
+  const open=trades.filter(t=>t.status==='open');
+  const closed=trades.filter(t=>t.status==='closed').slice(-40).reverse();
+  const all=[...open,...closed];
+  document.getElementById('tradeCount').textContent=all.length+' trades';
+  if(!all.length){ document.getElementById('history').innerHTML=empty('No trades yet'); return; }
+  const edot=e=>e.type.includes('TP')?'bg-green-500':e.type==='SL'?'bg-red-500':e.type.includes('BE')?'bg-blue-500':'bg-[#333]';
+  document.getElementById('history').innerHTML=all.map((t,i)=>{
+    const sc=t.status==='open'?'text-[#f59e0b]':t.pnl>0?'text-green-500':'text-red-500';
+    const sl=t.status==='open'?'Open':t.pnl>0?'Win':'Loss';
+    const evHtml=t.events?.length?`<div class="mt-4 space-y-1.5">
+      ${t.events.map(e=>`<div class="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-[#111] text-[11px]">
+        <span class="w-1.5 h-1.5 rounded-full flex-shrink-0 ${edot(e)}"></span>
+        <span class="font-medium min-w-[90px] text-[#aaa]">${e.type}</span>
+        <span class="text-[#444] flex-1">@ $${e.price}</span>
+        <span class="font-medium ${(e.pnl||0)>=0?'text-green-500':'text-red-500'}">${(e.pnl||0)>=0?'+':''}${fmt(e.pnl||0)}</span>
+        <span class="text-[#333]">${new Date(e.time).toLocaleString('de-DE',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</span>
+      </div>`).join('')}</div>`:'';
+    return `<details>
+      <summary class="flex items-center justify-between px-6 py-4 hover:bg-[#111] transition border-b border-[#1a1a1a]">
         <div class="flex items-center gap-2.5">
-          <span class="font-semibold text-[13px] ${t.pnl >= 0 ? 'text-[#34c759]' : 'text-[#ff3b30]'}">${t.pnl >= 0 ? '+' : ''}$${t.pnl.toFixed(2)}</span>
-          <svg class="chev w-3 h-3 text-[#6e6e73]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+          <span class="text-[14px] font-medium">${t.asset}</span>
+          <span class="text-[11px] font-medium px-2 py-0.5 rounded-md ${t.direction==='Long'?'text-green-500 bg-green-500/10':'text-red-500 bg-red-500/10'}">${t.direction}</span>
+          <span class="text-[12px] ${sc}">${sl}</span>
         </div>
-      </div>
-      <div class="item-body border-t border-[#f0f0f0] dark:border-[#2c2c2e] px-4 py-3">
-        <div class="grid grid-cols-3 gap-3">
-          ${kv('Entry', '$' + t.entry)}
-          ${kv('Stop Loss', '$' + t.stopLoss, 'text-[#ff3b30]')}
-          ${kv('Take Profits', t.targets?.map((tp,j)=>`TP${j+1}: $${tp.price}`).join('<br>') || '—')}
-          ${kv('PnL', (t.pnl>=0?'+':'')+'$'+t.pnl.toFixed(2), t.pnl>=0?'text-[#34c759]':'text-[#ff3b30]')}
-          ${kv('Geöffnet', new Date(t.openTime).toLocaleString('de-DE',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}))}
-          ${kv('Geschlossen', t.closeTime ? new Date(t.closeTime).toLocaleString('de-DE',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '—')}
-          ${t.closeReason ? kv('Grund', t.closeReason) : ''}
+        <div class="flex items-center gap-3">
+          <span class="text-[14px] font-semibold ${t.pnl>=0?'text-green-500':'text-red-500'}">${t.pnl>=0?'+':''}${fmt(t.pnl)}</span>
+          <svg class="chevron w-3.5 h-3.5 text-[#333]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
         </div>
-        ${evHtml}
+      </summary>
+      <div class="px-6 pb-5 pt-4 grid grid-cols-3 gap-4 bg-[#0a0a0a] border-b border-[#1a1a1a]">
+        ${kv('Entry','$'+t.entry)}
+        ${kv('Stop Loss','$'+t.stopLoss,'text-red-500')}
+        ${kv('Take Profits',t.targets?.map((tp,j)=>`TP${j+1} $${tp.price}`).join('<br>')||'—')}
+        ${kv('P&L',(t.pnl>=0?'+':'')+fmt(t.pnl),t.pnl>=0?'text-green-500':'text-red-500')}
+        ${kv('Opened',fmtDate(t.openTime))}
+        ${kv('Closed',t.closeTime?fmtDate(t.closeTime):'—')}
+        ${t.closeReason?kv('Reason',t.closeReason):''}
       </div>
-    </div>`;
+      ${evHtml?`<div class="px-6 pb-5 bg-[#0a0a0a] border-b border-[#1a1a1a]">${evHtml}</div>`:''}
+    </details>`;
   }).join('');
 }
 
-// ── AWARDS ────────────────────────────────────────────────────────────────
-function renderAwards() {
-  const closed = trades.filter(t => t.status === 'closed');
-  const el = document.getElementById('awards');
-  if (!closed.length) { el.innerHTML = '<p class="col-span-4 text-center text-[13px] text-[#6e6e73] py-4">Noch keine Trades</p>'; return; }
-  const sorted = [...closed].sort((a, b) => b.pnl - a.pnl);
-  const best = sorted[0], sec = sorted[1], worst = sorted[sorted.length - 1];
-  const avg  = closed.reduce((s, t) => s + t.pnl, 0) / closed.length;
-  el.innerHTML = [
-    best  ? awardCard('🥇', 'Bester Trade',    best.asset,  '+$'+best.pnl.toFixed(2),  'text-[#34c759]', best.direction, best.openTime) : '',
-    sec   ? awardCard('🥈', 'Zweitbester',     sec.asset,   '+$'+sec.pnl.toFixed(2),   'text-[#34c759]', sec.direction,  sec.openTime)  : '',
-    worst ? awardCard('📉', 'Größter Verlust', worst.asset, '$'+worst.pnl.toFixed(2), 'text-[#ff3b30]', worst.direction, worst.openTime) : '',
-    `<div class="bg-[#f5f5f7] dark:bg-[#2c2c2e] rounded-xl p-4">
-      <p class="text-[18px] mb-1">📊</p>
-      <p class="text-[10px] font-semibold uppercase tracking-widest text-[#6e6e73] mb-1">Ø PnL / Trade</p>
-      <p class="text-[18px] font-bold tracking-tight">${avg>=0?'+':''}$${avg.toFixed(2)}</p>
-      <p class="text-[11px] text-[#6e6e73] mt-1">${closed.length} Trades</p>
+// ── AWARDS
+function renderAwards(){
+  const closed=trades.filter(t=>t.status==='closed');
+  if(!closed.length){ document.getElementById('awards').innerHTML='<p class="col-span-4 text-center text-[13px] text-[#333] py-4">No closed trades yet</p>'; return; }
+  const sorted=[...closed].sort((a,b)=>b.pnl-a.pnl);
+  const best=sorted[0], sec=sorted[1], worst=sorted[sorted.length-1];
+  const avg=closed.reduce((s,t)=>s+t.pnl,0)/closed.length;
+  document.getElementById('awards').innerHTML=[
+    best  ? aw('🥇','Best Trade',best.asset,'+'+fmt(best.pnl),'text-green-500',best.direction,best.openTime):'',
+    sec   ? aw('🥈','Runner-up',sec.asset,'+'+fmt(sec.pnl),'text-green-500',sec.direction,sec.openTime):'',
+    worst ? aw('📉','Worst Trade',worst.asset,fmt(worst.pnl),'text-red-500',worst.direction,worst.openTime):'',
+    `<div class="rounded-xl bg-[#111] border border-[#1a1a1a] p-4">
+      <p class="text-[16px] mb-2">📊</p>
+      <p class="text-[11px] text-[#444] mb-1">Avg P&L / Trade</p>
+      <p class="text-[17px] font-semibold ${avg>=0?'text-green-500':'text-red-500'}">${avg>=0?'+':''}${fmt(avg)}</p>
+      <p class="text-[12px] text-[#333] mt-1">${closed.length} trades</p>
     </div>`
   ].join('');
 }
-
-function awardCard(icon, label, name, val, vc, dir, time) {
-  return `<div class="bg-[#f5f5f7] dark:bg-[#2c2c2e] rounded-xl p-4">
-    <p class="text-[18px] mb-1">${icon}</p>
-    <p class="text-[10px] font-semibold uppercase tracking-widest text-[#6e6e73] mb-1">${label}</p>
-    <p class="text-[16px] font-bold tracking-tight">${name}</p>
-    <p class="text-[14px] font-semibold ${vc}">${val}</p>
-    <p class="text-[11px] text-[#6e6e73] mt-1">${dir} · ${new Date(time).toLocaleDateString('de-DE')}</p>
+function aw(icon,label,name,val,vc,dir,time){
+  return `<div class="rounded-xl bg-[#111] border border-[#1a1a1a] p-4">
+    <p class="text-[16px] mb-2">${icon}</p>
+    <p class="text-[11px] text-[#444] mb-1">${label}</p>
+    <p class="text-[15px] font-semibold mb-0.5">${name}</p>
+    <p class="text-[15px] font-semibold ${vc}">${val}</p>
+    <p class="text-[12px] text-[#333] mt-1">${dir} · ${new Date(time).toLocaleDateString('de-DE')}</p>
   </div>`;
 }
 
-// ── HELPERS ───────────────────────────────────────────────────────────────
-function kv(label, val, valCls = '') {
-  return `<div><p class="text-[10px] font-semibold uppercase tracking-widest text-[#6e6e73] mb-1">${label}</p><p class="text-[12px] font-semibold ${valCls}">${val}</p></div>`;
+// ── UTILS
+function fmt(n){ return '$'+parseFloat(n).toFixed(2); }
+function fmtDate(ts){ return new Date(ts).toLocaleString('de-DE',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}); }
+function kv(label,val,vc='text-[#f0f0f0]'){
+  return `<div><p class="text-[10px] text-[#333] uppercase tracking-widest font-medium mb-1.5">${label}</p><p class="text-[13px] font-medium ${vc}">${val}</p></div>`;
 }
-
-function toggleItem(id) {
-  document.getElementById(id).classList.toggle('item-open');
+function empty(msg){ return `<p class="px-6 py-8 text-[13px] text-[#333] text-center">${msg}</p>`; }
+function toggle(sel,btn){
+  document.querySelectorAll(sel).forEach(b=>{
+    b.className = b===btn
+      ? b.className.replace('text-[#444] hover:text-[#999]','text-[#f0f0f0] font-medium')+' bg-[#1a1a1a]'
+      : b.className.replace('bg-[#1a1a1a]','').replace('text-[#f0f0f0] font-medium','text-[#444] hover:text-[#999]');
+  });
 }
 </script>
 </body>
