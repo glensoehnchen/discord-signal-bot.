@@ -1,443 +1,836 @@
 <!DOCTYPE html>
 <html lang="de" class="dark">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Signal Bot</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-  <link rel="preconnect" href="https://fonts.googleapis.com"/>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          fontFamily: { sans: ['Inter', '-apple-system', 'sans-serif'] },
-          colors: {
-            bg:    { DEFAULT: '#0a0a0a', card: '#111111', hover: '#161616', border: '#1f1f1f' },
-            txt:   { primary: '#f0f0f0', secondary: '#666', muted: '#333' },
-            green: { DEFAULT: '#22c55e', dim: 'rgba(34,197,94,.08)' },
-            red:   { DEFAULT: '#ef4444', dim: 'rgba(239,68,68,.08)' },
-            blue:  { DEFAULT: '#3b82f6' },
-          },
-        }
-      }
-    }
-  </script>
-  <style>
-    * { -webkit-font-smoothing: antialiased; box-sizing: border-box; }
-    body { background: #0a0a0a; color: #f0f0f0; font-family: 'Inter', -apple-system, sans-serif; }
-    @keyframes in { from { opacity:0; transform:translateY(10px) } to { opacity:1; transform:translateY(0) } }
-    .in  { animation: in .4s ease forwards; }
-    @keyframes breathe { 0%,100%{opacity:1} 50%{opacity:.2} }
-    .breathe { animation: breathe 2.4s ease-in-out infinite; }
-    details summary { list-style:none; cursor:pointer; }
-    details summary::-webkit-details-marker { display:none; }
-    details[open] .chevron { transform: rotate(180deg); }
-    .chevron { transition: transform .2s ease; display:inline-block; }
-    ::-webkit-scrollbar { width:0; }
-    input:-webkit-autofill { -webkit-box-shadow: 0 0 0 100px #111 inset !important; -webkit-text-fill-color: #f0f0f0 !important; }
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Trading Dashboard v2</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+* { box-sizing: border-box; }
+body { background: #09090E; color: #F0EEF8; font-family: 'Inter', sans-serif; margin: 0; min-height: 100vh; }
+
+.pulse-dot { animation: pulse 2s ease-in-out infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+.slide-in { animation: slideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1); }
+@keyframes slideIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+
+.fade-in { animation: fadeIn 0.25s ease-out; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.spinning { animation: spin 0.8s linear infinite; }
+
+.card { background: #111118; border: 1px solid #1E1E2E; border-radius: 12px; }
+.card-hover:hover { background: #1A1A24; border-color: #2A2A3E; transition: all 0.15s; }
+
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #2A2A3E; border-radius: 4px; }
+
+.nav-item { border-radius: 8px; padding: 9px 12px; cursor: pointer; display: flex; align-items: center; gap: 10px; font-size: 14px; color: #8884A4; transition: all 0.15s; }
+.nav-item:hover { background: #1A1A24; color: #F0EEF8; }
+.nav-item.active { background: #00D4AA18; color: #00D4AA; }
+
+.tag { font-size: 11px; font-weight: 500; padding: 3px 8px; border-radius: 5px; font-family: 'JetBrains Mono', monospace; letter-spacing: 0.02em; display: inline-block; }
+.tag-long { background: #00D4AA18; color: #00D4AA; }
+.tag-short { background: #FF4D6D22; color: #FF4D6D; }
+.tag-open { background: #C8B8FF18; color: #C8B8FF; }
+.tag-closed { background: #4A486622; color: #8884A4; }
+.tag-win { background: #00D4AA18; color: #00D4AA; }
+.tag-loss { background: #FF4D6D22; color: #FF4D6D; }
+.tag-test { background: #F59E0B18; color: #F59E0B; }
+.tag-be { background: #C8B8FF18; color: #C8B8FF; }
+
+.skeleton { background: linear-gradient(90deg, #1E1E2E 25%, #2A2A3E 50%, #1E1E2E 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 6px; }
+@keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+
+.event-line { font-size: 12px; color: #8884A4; font-family: 'JetBrains Mono', monospace; padding: 4px 0; }
+
+.range-btn { background: #1A1A24; border: 1px solid #1E1E2E; border-radius: 6px; padding: 5px 12px; color: #8884A4; font-size: 12px; cursor: pointer; font-family: 'JetBrains Mono', monospace; transition: all 0.15s; }
+.range-btn:hover { color: #F0EEF8; }
+.range-btn.active { background: #00D4AA18; border-color: #00D4AA33; color: #00D4AA; }
+</style>
 </head>
-<body class="min-h-screen">
+<body>
 
-<!-- ── LOGIN ─────────────────────────────────────────────────────────── -->
-<div id="loginWrap" class="min-h-screen flex items-center justify-center px-6">
-  <div class="w-full max-w-[320px] in">
-    <div class="mb-10 text-center">
-      <div class="inline-flex items-center justify-center w-10 h-10 rounded-2xl bg-[#111] border border-[#1f1f1f] mb-6">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f0f0f0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>
-        </svg>
-      </div>
-      <p class="text-[22px] font-semibold tracking-tight">Signal Bot</p>
-      <p class="text-[13px] text-[#555] mt-1">Trading Dashboard</p>
-    </div>
-    <input id="pw" type="password" placeholder="Password"
-      class="w-full bg-[#111] border border-[#1f1f1f] rounded-xl px-4 py-3 text-[15px] text-[#f0f0f0] placeholder-[#333] outline-none focus:border-[#333] transition mb-2"/>
-    <p id="loginErr" class="text-[12px] text-red-500 mb-3 h-4"></p>
-    <button onclick="doLogin()" class="w-full bg-[#f0f0f0] text-[#0a0a0a] text-[14px] font-semibold rounded-xl py-3 hover:bg-white transition active:scale-[.98]">
-      Continue
-    </button>
-  </div>
-</div>
+<div class="flex min-h-screen">
 
-<!-- ── APP ───────────────────────────────────────────────────────────── -->
-<div id="app" class="hidden min-h-screen">
-
-  <!-- Nav -->
-  <nav class="sticky top-0 z-20 border-b border-[#1a1a1a]" style="background:rgba(10,10,10,.85);backdrop-filter:blur(24px)">
-    <div class="max-w-3xl mx-auto px-6 h-14 flex items-center justify-between">
-      <div class="flex items-center gap-2.5">
-        <span class="w-1.5 h-1.5 rounded-full bg-green-500 breathe"></span>
-        <span class="text-[14px] font-medium text-[#f0f0f0]">Signal Bot</span>
-      </div>
-      <div class="flex items-center gap-5">
-        <span class="text-[12px] text-[#444]" id="lastUpdate"></span>
-        <button onclick="loadAll()" class="text-[12px] text-[#555] hover:text-[#f0f0f0] transition">Refresh</button>
-        <button onclick="doLogout()" class="text-[12px] text-[#555] hover:text-[#f0f0f0] transition">Sign out</button>
-      </div>
-    </div>
-  </nav>
-
-  <main class="max-w-3xl mx-auto px-6 py-8 space-y-3">
-
-    <!-- Hero -->
-    <div class="rounded-2xl border border-[#1a1a1a] bg-[#0e0e0e] px-7 py-6">
-      <p class="text-[12px] text-[#444] uppercase tracking-widest font-medium mb-3">Realized P&L</p>
-      <p id="heroPnl" class="text-[48px] font-semibold tracking-tight leading-none mb-5">—</p>
-      <div class="grid grid-cols-4 gap-px bg-[#1a1a1a] rounded-xl overflow-hidden">
-        <div class="bg-[#0e0e0e] px-4 py-3"><p class="text-[11px] text-[#444] mb-1">Win Rate</p><p id="mWR"   class="text-[16px] font-semibold">—</p></div>
-        <div class="bg-[#0e0e0e] px-4 py-3"><p class="text-[11px] text-[#444] mb-1">Trades</p>  <p id="mTR"   class="text-[16px] font-semibold">—</p></div>
-        <div class="bg-[#0e0e0e] px-4 py-3"><p class="text-[11px] text-[#444] mb-1">Balance</p> <p id="mBAL"  class="text-[16px] font-semibold">—</p></div>
-        <div class="bg-[#0e0e0e] px-4 py-3"><p class="text-[11px] text-[#444] mb-1">Open</p>    <p id="mOPEN" class="text-[16px] font-semibold">—</p></div>
+  <!-- Sidebar -->
+  <aside style="width:220px;min-height:100vh;background:#0D0D14;border-right:1px solid #1E1E2E;padding:20px 12px;display:flex;flex-direction:column;position:fixed;left:0;top:0;bottom:0;">
+    <div style="padding:0 4px 20px;border-bottom:1px solid #1E1E2E;margin-bottom:16px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div style="width:28px;height:28px;background:#00D4AA18;border:1px solid #00D4AA33;border-radius:7px;display:flex;align-items:center;justify-content:center;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#00D4AA" stroke-width="2.5"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline><polyline points="16 7 22 7 22 13"></polyline></svg>
+        </div>
+        <div>
+          <div style="font-size:13px;font-weight:600;letter-spacing:-0.01em;">Trading Dash</div>
+          <div style="font-size:10px;color:#4A4866;font-family:'JetBrains Mono';">v2.0</div>
+        </div>
       </div>
     </div>
 
-    <!-- Chart -->
-    <div class="rounded-2xl border border-[#1a1a1a] bg-[#0e0e0e] px-6 py-5">
-      <div class="flex items-center justify-between mb-5">
-        <p class="text-[13px] font-medium text-[#f0f0f0]">Equity Curve</p>
-        <div class="flex items-center gap-3">
-          <div class="flex gap-0.5" id="ctype">
-            <button onclick="setCtype('equity',this)" class="ctp text-[12px] px-3 py-1 rounded-lg bg-[#1a1a1a] text-[#f0f0f0] font-medium transition">Balance</button>
-            <button onclick="setCtype('upnl',this)"   class="ctp text-[12px] px-3 py-1 rounded-lg text-[#444] hover:text-[#999] transition">PnL</button>
+    <nav style="flex:1;">
+      <div class="nav-item active" onclick="showSection('overview')" id="nav-overview">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        Übersicht
+      </div>
+      <div class="nav-item" onclick="showSection('positions')" id="nav-positions" style="margin-top:2px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+        Positionen
+        <span id="nav-pos-count" style="margin-left:auto;font-size:11px;background:#1E1E2E;padding:1px 6px;border-radius:5px;color:#8884A4;font-family:'JetBrains Mono';">0</span>
+      </div>
+      <div class="nav-item" onclick="showSection('history')" id="nav-history" style="margin-top:2px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        Verlauf
+      </div>
+      <div class="nav-item" onclick="showSection('equity')" id="nav-equity" style="margin-top:2px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 14l4-4 4 4 5-5"/></svg>
+        Equity Chart
+      </div>
+      <div class="nav-item" onclick="showSection('balance')" id="nav-balance" style="margin-top:2px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+        Balance
+      </div>
+    </nav>
+
+    <div style="border-top:1px solid #1E1E2E;padding-top:12px;margin-top:12px;">
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 4px;margin-bottom:10px;">
+        <div id="bot-dot" class="pulse-dot" style="width:7px;height:7px;border-radius:50%;background:#00D4AA;flex-shrink:0;"></div>
+        <span id="bot-status-label" style="font-size:12px;color:#8884A4;">Bot: prüfe...</span>
+      </div>
+      <button onclick="handleLogout()" style="width:100%;text-align:left;background:none;border:none;cursor:pointer;padding:8px 12px;border-radius:8px;font-size:13px;color:#4A4866;font-family:'Inter';display:flex;align-items:center;gap:8px;transition:color 0.15s;" onmouseover="this.style.color='#FF4D6D'" onmouseout="this.style.color='#4A4866'">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        Abmelden
+      </button>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main style="margin-left:220px;flex:1;padding:28px 32px;overflow-y:auto;">
+
+    <!-- Header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;">
+      <div>
+        <h1 id="section-title" style="font-size:20px;font-weight:600;letter-spacing:-0.02em;margin:0 0 4px;">Übersicht</h1>
+        <p id="section-sub" style="font-size:13px;color:#8884A4;margin:0;">Live Trading Performance</p>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="font-size:12px;color:#4A4866;font-family:'JetBrains Mono';">Letztes Update: <span id="last-update">—</span></div>
+        <button onclick="refreshAll()" id="refresh-btn" style="background:#1A1A24;border:1px solid #1E1E2E;border-radius:8px;padding:8px 14px;color:#8884A4;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px;font-family:'Inter';" onmouseover="this.style.borderColor='#2A2A3E';this.style.color='#F0EEF8'" onmouseout="this.style.borderColor='#1E1E2E';this.style.color='#8884A4'">
+          <svg id="refresh-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          Aktualisieren
+        </button>
+      </div>
+    </div>
+
+    <!-- ── SECTION: OVERVIEW ── -->
+    <div id="section-overview">
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px;" id="stats-grid">
+        <div class="card p-5 skeleton" style="height:90px;"></div>
+        <div class="card p-5 skeleton" style="height:90px;"></div>
+        <div class="card p-5 skeleton" style="height:90px;"></div>
+        <div class="card p-5 skeleton" style="height:90px;"></div>
+      </div>
+
+      <div class="card" style="margin-bottom:22px;">
+        <div style="padding:16px 20px;border-bottom:1px solid #1E1E2E;display:flex;align-items:center;justify-content:space-between;">
+          <span style="font-size:14px;font-weight:500;">Offene Positionen</span>
+          <button onclick="showSection('positions')" style="font-size:12px;color:#00D4AA;background:none;border:none;cursor:pointer;font-family:'Inter';">Alle anzeigen →</button>
+        </div>
+        <div id="positions-preview" style="padding:12px 8px;">
+          <div class="skeleton" style="height:48px;margin:8px;border-radius:8px;"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div style="padding:16px 20px;border-bottom:1px solid #1E1E2E;display:flex;align-items:center;justify-content:space-between;">
+          <span style="font-size:14px;font-weight:500;">Letzte Trades</span>
+          <button onclick="showSection('history')" style="font-size:12px;color:#00D4AA;background:none;border:none;cursor:pointer;font-family:'Inter';">Verlauf →</button>
+        </div>
+        <div id="recent-trades" style="padding:12px 8px;">
+          <div class="skeleton" style="height:44px;margin:8px;border-radius:8px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── SECTION: POSITIONS ── -->
+    <div id="section-positions" style="display:none;">
+      <div class="card">
+        <div style="padding:16px 20px;border-bottom:1px solid #1E1E2E;">
+          <span style="font-size:14px;font-weight:500;">Offene Positionen</span>
+        </div>
+        <div id="positions-full" style="padding:8px;">
+          <div class="skeleton" style="height:64px;margin:8px;border-radius:8px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── SECTION: HISTORY ── -->
+    <div id="section-history" style="display:none;">
+      <div class="card">
+        <div style="padding:16px 20px;border-bottom:1px solid #1E1E2E;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+          <span style="font-size:14px;font-weight:500;">Trade-Verlauf</span>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <button class="range-btn active" onclick="filterHistory('all')" id="hf-all">Alle</button>
+            <button class="range-btn" onclick="filterHistory('win')" id="hf-win">Wins</button>
+            <button class="range-btn" onclick="filterHistory('loss')" id="hf-loss">Losses</button>
+            <button class="range-btn" onclick="filterHistory('open')" id="hf-open">Offen</button>
+            <button class="range-btn" onclick="filterHistory('test')" id="hf-test">Test</button>
           </div>
-          <div class="flex gap-0.5" id="range">
-            <button onclick="setDays('1',this)"  class="rng text-[12px] px-3 py-1 rounded-lg text-[#444] hover:text-[#999] transition">1D</button>
-            <button onclick="setDays('7',this)"  class="rng text-[12px] px-3 py-1 rounded-lg bg-[#1a1a1a] text-[#f0f0f0] font-medium transition">7D</button>
-            <button onclick="setDays('30',this)" class="rng text-[12px] px-3 py-1 rounded-lg text-[#444] hover:text-[#999] transition">30D</button>
-            <button onclick="setDays('90',this)" class="rng text-[12px] px-3 py-1 rounded-lg text-[#444] hover:text-[#999] transition">90D</button>
+        </div>
+        <div id="history-table" style="padding:8px;">
+          <div class="skeleton" style="height:44px;margin:8px;border-radius:8px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── SECTION: EQUITY CHART ── -->
+    <div id="section-equity" style="display:none;">
+      <div class="card">
+        <div style="padding:16px 20px;border-bottom:1px solid #1E1E2E;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+          <span style="font-size:14px;font-weight:500;">Equity Verlauf</span>
+          <div style="display:flex;gap:6px;">
+            <button class="range-btn" onclick="setRange(1)" id="r-1">1d</button>
+            <button class="range-btn active" onclick="setRange(7)" id="r-7">7d</button>
+            <button class="range-btn" onclick="setRange(30)" id="r-30">30d</button>
+            <button class="range-btn" onclick="setRange(90)" id="r-90">90d</button>
+          </div>
+        </div>
+        <div style="padding:20px;">
+          <div style="position:relative;height:360px;">
+            <canvas id="equity-chart"></canvas>
           </div>
         </div>
       </div>
-      <div class="h-48" id="chartWrap"><canvas id="eqc"></canvas></div>
     </div>
 
-    <!-- Calendar -->
-    <div class="rounded-2xl border border-[#1a1a1a] bg-[#0e0e0e] px-6 py-5">
-      <div class="flex items-center justify-between mb-5">
-        <p class="text-[13px] font-medium" id="calLabel"></p>
-        <div class="flex gap-1">
-          <button onclick="moveMonth(-1)" class="w-7 h-7 rounded-lg bg-[#161616] text-[#666] hover:text-[#f0f0f0] text-[15px] flex items-center justify-center transition">‹</button>
-          <button onclick="moveMonth(1)"  class="w-7 h-7 rounded-lg bg-[#161616] text-[#666] hover:text-[#f0f0f0] text-[15px] flex items-center justify-center transition">›</button>
-        </div>
+    <!-- ── SECTION: BALANCE ── -->
+    <div id="section-balance" style="display:none;">
+      <div id="balance-content">
+        <div class="card p-5 skeleton" style="height:120px;margin-bottom:14px;"></div>
+        <div class="card p-5 skeleton" style="height:200px;"></div>
       </div>
-      <div class="grid grid-cols-7 gap-1 mb-2">
-        <span class="text-[10px] text-[#333] text-center font-medium py-1">Mo</span>
-        <span class="text-[10px] text-[#333] text-center font-medium py-1">Di</span>
-        <span class="text-[10px] text-[#333] text-center font-medium py-1">Mi</span>
-        <span class="text-[10px] text-[#333] text-center font-medium py-1">Do</span>
-        <span class="text-[10px] text-[#333] text-center font-medium py-1">Fr</span>
-        <span class="text-[10px] text-[#333] text-center font-medium py-1">Sa</span>
-        <span class="text-[10px] text-[#333] text-center font-medium py-1">So</span>
-      </div>
-      <div class="grid grid-cols-7 gap-1" id="calGrid"></div>
-    </div>
-
-    <!-- Positions -->
-    <div class="rounded-2xl border border-[#1a1a1a] bg-[#0e0e0e] overflow-hidden">
-      <div class="px-6 py-4 flex items-center justify-between border-b border-[#1a1a1a]">
-        <p class="text-[13px] font-medium">Open Positions</p>
-        <span class="text-[12px] text-[#444]" id="posCount"></span>
-      </div>
-      <div id="positions"></div>
-    </div>
-
-    <!-- History -->
-    <div class="rounded-2xl border border-[#1a1a1a] bg-[#0e0e0e] overflow-hidden">
-      <div class="px-6 py-4 flex items-center justify-between border-b border-[#1a1a1a]">
-        <p class="text-[13px] font-medium">Trade History</p>
-        <span class="text-[12px] text-[#444]" id="tradeCount"></span>
-      </div>
-      <div id="history"></div>
-    </div>
-
-    <!-- Awards -->
-    <div class="rounded-2xl border border-[#1a1a1a] bg-[#0e0e0e] px-6 py-5">
-      <p class="text-[13px] font-medium mb-5">Highlights</p>
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-2" id="awards"></div>
     </div>
 
   </main>
 </div>
 
-<!-- Modal -->
-<div id="modal" class="hidden fixed inset-0 z-50 flex items-end md:items-center justify-center px-4 pb-6 md:pb-0">
-  <div class="absolute inset-0" style="background:rgba(0,0,0,.7);backdrop-filter:blur(8px)" onclick="closeModal()"></div>
-  <div class="relative w-full max-w-sm rounded-2xl border border-[#1f1f1f] bg-[#111] p-6 in">
-    <div class="flex items-center justify-between mb-5">
-      <p class="text-[15px] font-semibold" id="modalTitle"></p>
-      <button onclick="closeModal()" class="w-7 h-7 rounded-lg bg-[#1a1a1a] text-[#555] hover:text-[#f0f0f0] text-[12px] flex items-center justify-center transition">✕</button>
-    </div>
-    <div id="modalBody"></div>
-  </div>
-</div>
-
 <script>
-const PASSWORD = "signal2024";
-let trades=[], positions=[], balance={}, stats={}, equity=[];
-let days='7', ctype='equity', chart=null;
-let calY=new Date().getFullYear(), calM=new Date().getMonth();
+let state = {
+  stats: null,
+  positions: [],
+  trades: [],
+  balance: null,
+  equity: [],
+  historyFilter: 'all',
+  chartRange: 7,
+  chart: null,
+};
 
-// ── AUTH
-function doLogin(){
-  if(document.getElementById('pw').value===PASSWORD){
-    document.getElementById('loginWrap').classList.add('hidden');
-    document.getElementById('app').classList.remove('hidden');
-    document.getElementById('loginErr').textContent='';
-    loadAll();
-    setInterval(loadAll,30000);
-  } else {
-    document.getElementById('loginErr').textContent='Incorrect password.';
+async function api(path) {
+  const res = await fetch(path, { credentials: 'same-origin' });
+  if (res.status === 401) { handleLogout(); throw new Error('Unauthorized'); }
+  if (!res.ok) throw new Error('API ' + res.status);
+  return res.json();
+}
+
+function handleLogout() {
+  // Basic Auth Logout: ungültige Credentials senden um Browser-Cache zu invalidieren
+  fetch('/', { headers: { 'Authorization': 'Basic ' + btoa('logout:logout') } })
+    .catch(() => {})
+    .finally(() => {
+      // Hinweis anzeigen statt direkter Redirect (zuverlässiger)
+      document.body.innerHTML = '<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#09090E;color:#F0EEF8;font-family:Inter,sans-serif;text-align:center;padding:20px;"><div><h2 style="font-size:18px;font-weight:500;margin:0 0 12px;">Abgemeldet</h2><p style="color:#8884A4;font-size:14px;margin:0 0 20px;">Schließe diesen Tab oder lade die Seite neu, um dich erneut anzumelden.</p><button onclick="window.location.reload()" style="background:#00D4AA;color:#09090E;border:none;border-radius:8px;padding:10px 20px;font-size:14px;cursor:pointer;font-family:Inter;font-weight:600;">Neu laden</button></div></div>';
+    });
+}
+
+async function refreshAll() {
+  const icon = document.getElementById('refresh-icon');
+  icon.classList.add('spinning');
+
+  try {
+    const [stats, positions, trades, balance, equity] = await Promise.allSettled([
+      api('/api/stats'),
+      api('/api/positions'),
+      api('/api/trades'),
+      api('/api/balance'),
+      api('/api/equity?days=' + state.chartRange),
+    ]);
+
+    if (stats.status === 'fulfilled') { state.stats = stats.value; renderStats(); }
+    if (positions.status === 'fulfilled') { state.positions = positions.value || []; renderPositionsPreview(); renderPositionsFull(); updateNavCount(); }
+    if (trades.status === 'fulfilled') { state.trades = trades.value || []; renderHistory(); renderRecentTrades(); }
+    if (balance.status === 'fulfilled') { state.balance = balance.value; renderBalance(); renderStats(); }
+    if (equity.status === 'fulfilled') { state.equity = equity.value || []; renderChart(); }
+
+    // Health check
+    try {
+      const h = await api('/health');
+      updateBotStatus(h);
+    } catch (e) { updateBotStatus(null); }
+
+    document.getElementById('last-update').textContent = new Date().toLocaleTimeString('de-DE');
+  } catch (e) {
+    console.error(e);
+  } finally {
+    icon.classList.remove('spinning');
   }
 }
-document.getElementById('pw').addEventListener('keydown',e=>{ if(e.key==='Enter') doLogin(); });
-function doLogout(){
-  document.getElementById('app').classList.add('hidden');
-  document.getElementById('loginWrap').classList.remove('hidden');
-  document.getElementById('pw').value='';
+
+function updateNavCount() {
+  document.getElementById('nav-pos-count').textContent = state.positions.length;
 }
 
-// ── FETCH
-async function loadAll(){
-  try {
-    const [s,p,t,b,e]=await Promise.all([
-      fetch('/api/stats').then(r=>r.json()),
-      fetch('/api/positions').then(r=>r.json()),
-      fetch('/api/trades').then(r=>r.json()),
-      fetch('/api/balance').then(r=>r.json()),
-      fetch(`/api/equity?days=${days}`).then(r=>r.json()),
-    ]);
-    stats=s; positions=p; trades=t; balance=b; equity=e;
-    document.getElementById('lastUpdate').textContent=new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
-    renderHero(); buildChart(); renderCal(); renderPositions(); renderHistory(); renderAwards();
-  } catch(err){ console.error(err); }
-}
-
-// ── HERO
-function renderHero(){
-  const rpnl=parseFloat(stats.totalPnl||0);
-  const upnl=positions.reduce((s,p)=>s+parseFloat(p.unrealizedPL||0),0);
-  const bal=parseFloat(balance.accountEquity||0);
-  const hp=document.getElementById('heroPnl');
-  hp.textContent=(rpnl>=0?'+':'')+fmt(rpnl);
-  hp.className='text-[48px] font-semibold tracking-tight leading-none mb-5 '+(rpnl>=0?'text-green-500':'text-red-500');
-  document.getElementById('mWR').textContent=stats.total>0?stats.rate+'%':'—';
-  document.getElementById('mTR').textContent=(stats.wins||0)+'W · '+(stats.losses||0)+'L';
-  document.getElementById('mBAL').textContent=fmt(bal);
-  document.getElementById('mOPEN').textContent=positions.length;
-}
-
-// ── CHART
-function setDays(d,btn){
-  days=d;
-  toggle('.rng',btn);
-  fetch(`/api/equity?days=${days}`).then(r=>r.json()).then(e=>{ equity=e; rebuildChart(); });
-}
-function setCtype(t,btn){ ctype=t; toggle('.ctp',btn); rebuildChart(); }
-function rebuildChart(){ if(chart){chart.destroy();chart=null;} buildChart(); }
-function buildChart(){
-  const wrap=document.getElementById('chartWrap');
-  if(!equity||equity.length<2){
-    wrap.innerHTML='<div class="h-full flex items-center justify-center text-[13px] text-[#333]">No data yet</div>';
+function updateBotStatus(h) {
+  const el = document.getElementById('bot-status-label');
+  const dot = document.getElementById('bot-dot');
+  if (!h) {
+    el.textContent = 'Bot: offline';
+    dot.style.background = '#FF4D6D';
     return;
   }
-  wrap.innerHTML='<canvas id="eqc"></canvas>';
-  const data=equity.map(e=>ctype==='equity'?e.equity:e.upnl);
-  const labels=equity.map(e=>new Date(e.time).toLocaleString('de-DE',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}));
-  const up=data[data.length-1]>=data[0];
-  const col=up?'#22c55e':'#ef4444';
-  const ctx=document.getElementById('eqc').getContext('2d');
-  const g=ctx.createLinearGradient(0,0,0,192);
-  g.addColorStop(0,up?'rgba(34,197,94,.1)':'rgba(239,68,68,.08)');
-  g.addColorStop(1,'rgba(0,0,0,0)');
-  chart=new Chart(ctx,{
-    type:'line',
-    data:{labels,datasets:[{data,borderColor:col,backgroundColor:g,borderWidth:1.5,fill:true,tension:.4,
-      pointRadius:data.length>30?0:3,pointHoverRadius:5,pointBackgroundColor:col,
-      pointBorderColor:'#0e0e0e',pointBorderWidth:2}]},
-    options:{responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{display:false},tooltip:{backgroundColor:'#161616',titleColor:'#999',bodyColor:col,
-        borderColor:'#2a2a2a',borderWidth:1,padding:10,cornerRadius:10,
-        callbacks:{label:c=>' $'+c.raw}}},
-      scales:{
-        x:{grid:{display:false},border:{display:false},ticks:{color:'#333',font:{size:10},maxTicksLimit:6}},
-        y:{grid:{color:'rgba(255,255,255,.03)'},border:{display:false},
-          ticks:{color:'#333',font:{size:10},callback:v=>'$'+v}}
-      },interaction:{intersect:false,mode:'index'}
+  if (h.paused) {
+    el.textContent = 'Bot: pausiert';
+    dot.style.background = '#F59E0B';
+  } else {
+    el.textContent = 'Bot: aktiv';
+    dot.style.background = '#00D4AA';
+  }
+}
+
+function fmtUSD(n) {
+  const num = parseFloat(n || 0);
+  return (num >= 0 ? '+' : '') + '$' + Math.abs(num).toFixed(2) * (num >= 0 ? 1 : -1).toFixed(2);
+}
+
+function renderStats() {
+  const s = state.stats;
+  const b = state.balance;
+  if (!s) return;
+
+  const totalPnl = parseFloat(s.totalPnl || 0);
+  const rate = parseFloat(s.rate || 0);
+  const equity = b ? parseFloat(b.accountEquity || 0) : 0;
+  const upnl = state.positions.reduce((sum, p) => sum + parseFloat(p.unrealizedPL || 0), 0);
+
+  document.getElementById('stats-grid').innerHTML = `
+    <div class="card p-5 fade-in">
+      <div style="font-size:11px;color:#8884A4;margin-bottom:10px;text-transform:uppercase;letter-spacing:0.06em;">Account Equity</div>
+      <div style="font-size:26px;font-weight:600;font-family:'JetBrains Mono';">$${equity.toFixed(2)}</div>
+      <div style="font-size:12px;color:#4A4866;margin-top:4px;">${b ? parseFloat(b.available).toFixed(2) + ' verfügbar' : '—'}</div>
+    </div>
+    <div class="card p-5 fade-in">
+      <div style="font-size:11px;color:#8884A4;margin-bottom:10px;text-transform:uppercase;letter-spacing:0.06em;">Winrate</div>
+      <div style="font-size:26px;font-weight:600;font-family:'JetBrains Mono';color:${rate >= 50 ? '#00D4AA' : '#FF4D6D'};">${rate.toFixed(1)}%</div>
+      <div style="font-size:12px;color:#4A4866;margin-top:4px;">${s.wins || 0}W / ${s.losses || 0}L · ${s.total || 0} Trades</div>
+    </div>
+    <div class="card p-5 fade-in">
+      <div style="font-size:11px;color:#8884A4;margin-bottom:10px;text-transform:uppercase;letter-spacing:0.06em;">Total PnL</div>
+      <div style="font-size:26px;font-weight:600;font-family:'JetBrains Mono';color:${totalPnl >= 0 ? '#00D4AA' : '#FF4D6D'};">${totalPnl >= 0 ? '+' : '−'}$${Math.abs(totalPnl).toFixed(2)}</div>
+      <div style="font-size:12px;color:#4A4866;margin-top:4px;">Realisiert · ${s.total || 0} Trades</div>
+    </div>
+    <div class="card p-5 fade-in">
+      <div style="font-size:11px;color:#8884A4;margin-bottom:10px;text-transform:uppercase;letter-spacing:0.06em;">Offenes PnL</div>
+      <div style="font-size:26px;font-weight:600;font-family:'JetBrains Mono';color:${upnl >= 0 ? '#00D4AA' : '#FF4D6D'};">${upnl >= 0 ? '+' : '−'}$${Math.abs(upnl).toFixed(2)}</div>
+      <div style="font-size:12px;color:#4A4866;margin-top:4px;">${state.positions.length} ${state.positions.length === 1 ? 'Position' : 'Positionen'}</div>
+    </div>
+  `;
+}
+
+function findTrade(asset) {
+  return state.trades.find(t => t.asset === asset && t.status === 'open');
+}
+
+function positionRow(p, compact=true) {
+  const asset = p.symbol.replace('USDT', '');
+  const pnl = parseFloat(p.unrealizedPL || 0);
+  const side = (p.holdSide || '').toLowerCase();
+  const entry = parseFloat(p.openPriceAvg || 0);
+  const mark = parseFloat(p.markPrice || 0);
+  const size = parseFloat(p.total || 0);
+  const lev = p.leverage || '1';
+  const realized = parseFloat(p.achievedProfits || 0);
+  const trade = findTrade(asset);
+
+  if (compact) {
+    return `
+    <div class="card-hover" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-radius:8px;margin:0 4px 4px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div class="pulse-dot" style="width:6px;height:6px;border-radius:50%;background:${side === 'long' ? '#00D4AA' : '#FF4D6D'};"></div>
+        <span class="tag ${side === 'long' ? 'tag-long' : 'tag-short'}">${side.toUpperCase()}</span>
+        <span style="font-size:14px;font-weight:500;font-family:'JetBrains Mono';">${asset}</span>
+        ${trade?.isTest ? '<span class="tag tag-test">TEST</span>' : ''}
+        ${trade?.beSet ? '<span class="tag tag-be">BE</span>' : ''}
+      </div>
+      <div style="display:flex;align-items:center;gap:16px;">
+        <span style="font-size:12px;color:#4A4866;font-family:'JetBrains Mono';">$${entry.toFixed(4)}</span>
+        <span style="font-size:14px;font-weight:500;font-family:'JetBrains Mono';color:${pnl >= 0 ? '#00D4AA' : '#FF4D6D'};">${pnl >= 0 ? '+' : '−'}$${Math.abs(pnl).toFixed(2)}</span>
+      </div>
+    </div>`;
+  }
+
+  const tpList = trade?.targets?.length
+    ? trade.targets.map((t, i) => `<span style="font-size:11px;color:#8884A4;font-family:'JetBrains Mono';">TP${i+1} $${t.price}</span>`).join('<span style="color:#2A2A3E;margin:0 6px;">·</span>')
+    : '<span style="font-size:11px;color:#4A4866;">keine TPs</span>';
+
+  return `
+  <div class="card-hover" style="padding:16px;border-radius:10px;margin:0 4px 6px;border:1px solid #1E1E2E;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div class="pulse-dot" style="width:7px;height:7px;border-radius:50%;background:${side === 'long' ? '#00D4AA' : '#FF4D6D'};"></div>
+        <span class="tag ${side === 'long' ? 'tag-long' : 'tag-short'}">${side.toUpperCase()}</span>
+        <span style="font-size:15px;font-weight:600;font-family:'JetBrains Mono';">${asset}</span>
+        ${trade?.isTest ? '<span class="tag tag-test">TEST</span>' : ''}
+        ${trade?.beSet ? '<span class="tag tag-be">BE gesetzt</span>' : ''}
+      </div>
+      <div style="text-align:right;">
+        <div style="font-size:16px;font-weight:600;font-family:'JetBrains Mono';color:${pnl >= 0 ? '#00D4AA' : '#FF4D6D'};">${pnl >= 0 ? '+' : '−'}$${Math.abs(pnl).toFixed(2)}</div>
+        <div style="font-size:11px;color:#4A4866;font-family:'JetBrains Mono';">${realized !== 0 ? 'realisiert: ' + (realized >= 0 ? '+' : '−') + '$' + Math.abs(realized).toFixed(2) : ''}</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:12px;">
+      <div><div style="font-size:11px;color:#4A4866;margin-bottom:3px;text-transform:uppercase;letter-spacing:0.05em;">Entry</div><div style="font-size:13px;font-family:'JetBrains Mono';">$${entry.toFixed(4)}</div></div>
+      <div><div style="font-size:11px;color:#4A4866;margin-bottom:3px;text-transform:uppercase;letter-spacing:0.05em;">Mark</div><div style="font-size:13px;font-family:'JetBrains Mono';">$${mark.toFixed(4)}</div></div>
+      <div><div style="font-size:11px;color:#4A4866;margin-bottom:3px;text-transform:uppercase;letter-spacing:0.05em;">Size</div><div style="font-size:13px;font-family:'JetBrains Mono';">${size}</div></div>
+      <div><div style="font-size:11px;color:#4A4866;margin-bottom:3px;text-transform:uppercase;letter-spacing:0.05em;">Lev</div><div style="font-size:13px;font-family:'JetBrains Mono';">${lev}x</div></div>
+    </div>
+    <div style="border-top:1px solid #1E1E2E;padding-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      ${trade?.stopLoss ? `<span style="font-size:11px;color:#8884A4;font-family:'JetBrains Mono';">SL $${trade.stopLoss}</span><span style="color:#2A2A3E;">·</span>` : ''}
+      ${tpList}
+    </div>
+  </div>`;
+}
+
+function renderPositionsPreview() {
+  const el = document.getElementById('positions-preview');
+  if (!state.positions.length) {
+    el.innerHTML = `<div style="padding:24px;text-align:center;color:#4A4866;font-size:13px;">Keine offenen Positionen</div>`;
+    return;
+  }
+  el.innerHTML = state.positions.slice(0, 4).map(p => positionRow(p, true)).join('');
+}
+
+function renderPositionsFull() {
+  const el = document.getElementById('positions-full');
+  if (!state.positions.length) {
+    el.innerHTML = `<div style="padding:48px 32px;text-align:center;color:#4A4866;font-size:14px;">
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#2A2A3E" stroke-width="1.5" style="margin:0 auto 14px;display:block;"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+      Keine offenen Positionen
+    </div>`;
+    return;
+  }
+  el.innerHTML = `<div style="padding:4px;">` + state.positions.map(p => positionRow(p, false)).join('') + '</div>';
+}
+
+function tradeRow(t, expanded=false) {
+  const pnl = parseFloat(t.pnl || 0);
+  const side = (t.direction || '').toLowerCase();
+  const isWin = pnl > 0;
+  const isOpen = t.status === 'open';
+  const date = t.openTime ? new Date(t.openTime).toLocaleDateString('de-DE', { day:'2-digit', month:'2-digit', year:'2-digit' }) : '—';
+  const time = t.openTime ? new Date(t.openTime).toLocaleTimeString('de-DE', { hour:'2-digit', minute:'2-digit' }) : '';
+
+  let statusTag;
+  if (isOpen) statusTag = '<span class="tag tag-open">OFFEN</span>';
+  else if (isWin) statusTag = '<span class="tag tag-win">WIN</span>';
+  else statusTag = '<span class="tag tag-loss">LOSS</span>';
+
+  const reasonTag = t.closeReason ? `<span style="font-size:11px;color:#4A4866;font-family:'JetBrains Mono';">${t.closeReason}</span>` : '';
+
+  const eventsHTML = (t.events && t.events.length) ? `
+    <div style="margin-top:10px;padding-top:10px;border-top:1px solid #1E1E2E;">
+      <div style="font-size:11px;color:#4A4866;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Events</div>
+      ${t.events.map(e => `<div class="event-line">${e.type} @ $${parseFloat(e.price).toFixed(4)} · ${parseFloat(e.pnl || 0) >= 0 ? '+' : '−'}$${Math.abs(parseFloat(e.pnl || 0)).toFixed(2)} · ${new Date(e.time).toLocaleString('de-DE', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</div>`).join('')}
+    </div>
+  ` : '';
+
+  const detailRow = expanded ? `
+    <div style="margin-top:10px;padding-top:10px;border-top:1px solid #1E1E2E;display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
+      <div><div style="font-size:10px;color:#4A4866;text-transform:uppercase;">Entry</div><div style="font-size:12px;font-family:'JetBrains Mono';">$${parseFloat(t.entry).toFixed(4)}</div></div>
+      <div><div style="font-size:10px;color:#4A4866;text-transform:uppercase;">SL</div><div style="font-size:12px;font-family:'JetBrains Mono';">$${parseFloat(t.stopLoss).toFixed(4)}</div></div>
+      <div><div style="font-size:10px;color:#4A4866;text-transform:uppercase;">Size</div><div style="font-size:12px;font-family:'JetBrains Mono';">${parseFloat(t.totalSize).toFixed(4)}</div></div>
+      <div><div style="font-size:10px;color:#4A4866;text-transform:uppercase;">TPs</div><div style="font-size:12px;font-family:'JetBrains Mono';">${t.targets?.length || 0}</div></div>
+    </div>
+    ${eventsHTML}
+  ` : '';
+
+  return `
+  <div class="card-hover" style="padding:12px 16px;border-radius:8px;margin:0 4px 4px;border:1px solid transparent;cursor:pointer;" onclick="toggleTrade('${t.id}')">
+    <div style="display:flex;align-items:center;justify-content:space-between;">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        ${statusTag}
+        <span class="tag ${side === 'long' ? 'tag-long' : 'tag-short'}">${side.toUpperCase()}</span>
+        <span style="font-size:14px;font-weight:500;font-family:'JetBrains Mono';">${t.asset}</span>
+        ${t.isTest ? '<span class="tag tag-test">TEST</span>' : ''}
+        ${t.beSet ? '<span class="tag tag-be">BE</span>' : ''}
+        ${reasonTag}
+      </div>
+      <div style="display:flex;align-items:center;gap:14px;">
+        <span style="font-size:11px;color:#4A4866;font-family:'JetBrains Mono';">${date} ${time}</span>
+        <span style="font-size:14px;font-weight:500;font-family:'JetBrains Mono';color:${isOpen ? '#C8B8FF' : (isWin ? '#00D4AA' : '#FF4D6D')};min-width:80px;text-align:right;">${pnl >= 0 ? '+' : '−'}$${Math.abs(pnl).toFixed(2)}</span>
+      </div>
+    </div>
+    ${detailRow}
+  </div>`;
+}
+
+let expandedTradeId = null;
+function toggleTrade(id) {
+  expandedTradeId = (expandedTradeId === id) ? null : id;
+  renderHistory();
+  renderRecentTrades();
+}
+
+function renderRecentTrades() {
+  const el = document.getElementById('recent-trades');
+  const trades = [...state.trades].sort((a, b) => new Date(b.openTime) - new Date(a.openTime)).slice(0, 6);
+  if (!trades.length) {
+    el.innerHTML = `<div style="padding:24px;text-align:center;color:#4A4866;font-size:13px;">Noch keine Trades</div>`;
+    return;
+  }
+  el.innerHTML = trades.map(t => tradeRow(t, t.id === expandedTradeId)).join('');
+}
+
+function filterHistory(f) {
+  state.historyFilter = f;
+  ['all','win','loss','open','test'].forEach(k => {
+    const btn = document.getElementById('hf-' + k);
+    btn.classList.toggle('active', k === f);
+  });
+  renderHistory();
+}
+
+function renderHistory() {
+  const el = document.getElementById('history-table');
+  let trades = [...state.trades].sort((a, b) => new Date(b.openTime) - new Date(a.openTime));
+  if (state.historyFilter === 'win') trades = trades.filter(t => t.status === 'closed' && parseFloat(t.pnl) > 0);
+  if (state.historyFilter === 'loss') trades = trades.filter(t => t.status === 'closed' && parseFloat(t.pnl) <= 0);
+  if (state.historyFilter === 'open') trades = trades.filter(t => t.status === 'open');
+  if (state.historyFilter === 'test') trades = trades.filter(t => t.isTest);
+
+  if (!trades.length) {
+    el.innerHTML = `<div style="padding:32px;text-align:center;color:#4A4866;font-size:13px;">Keine Trades gefunden</div>`;
+    return;
+  }
+  el.innerHTML = `<div style="padding:4px;">` + trades.map(t => tradeRow(t, t.id === expandedTradeId)).join('') + '</div>';
+}
+
+function renderBalance() {
+  const el = document.getElementById('balance-content');
+  const b = state.balance;
+  if (!b) { el.innerHTML = `<div style="color:#4A4866;text-align:center;padding:40px;">Keine Balance-Daten</div>`; return; }
+
+  const equity = parseFloat(b.accountEquity || 0);
+  const avail = parseFloat(b.available || 0);
+  const upnl = parseFloat(b.unrealizedPL || 0);
+  const inUse = equity - avail;
+  const usePct = equity > 0 ? ((inUse / equity) * 100) : 0;
+
+  el.innerHTML = `
+  <div class="card p-6 fade-in" style="margin-bottom:14px;">
+    <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:6px;">
+      <span style="font-size:32px;font-weight:600;font-family:'JetBrains Mono';">$${equity.toFixed(2)}</span>
+      <span style="font-size:14px;color:#8884A4;">Account Equity (${b.marginCoin || 'USDT'})</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:24px;">
+      <div>
+        <div style="font-size:11px;color:#4A4866;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">Verfügbar</div>
+        <div style="font-size:18px;font-weight:500;font-family:'JetBrains Mono';color:#00D4AA;">$${avail.toFixed(2)}</div>
+      </div>
+      <div>
+        <div style="font-size:11px;color:#4A4866;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">In Positionen</div>
+        <div style="font-size:18px;font-weight:500;font-family:'JetBrains Mono';color:#C8B8FF;">$${inUse.toFixed(2)}</div>
+      </div>
+      <div>
+        <div style="font-size:11px;color:#4A4866;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">Unrealisiert</div>
+        <div style="font-size:18px;font-weight:500;font-family:'JetBrains Mono';color:${upnl >= 0 ? '#00D4AA' : '#FF4D6D'};">${upnl >= 0 ? '+' : '−'}$${Math.abs(upnl).toFixed(2)}</div>
+      </div>
+    </div>
+  </div>
+  <div class="card p-6 fade-in">
+    <div style="font-size:12px;color:#8884A4;margin-bottom:14px;">Kapitalauslastung</div>
+    <div style="background:#1E1E2E;border-radius:6px;height:10px;overflow:hidden;margin-bottom:10px;">
+      <div style="height:100%;width:${Math.min(usePct, 100)}%;background:linear-gradient(90deg,#C8B8FF,#00D4AA);border-radius:6px;transition:width 0.5s;"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:11px;color:#4A4866;font-family:'JetBrains Mono';">
+      <span>Frei: ${(100 - usePct).toFixed(1)}%</span>
+      <span>Genutzt: ${usePct.toFixed(1)}%</span>
+    </div>
+  </div>`;
+}
+
+function setRange(days) {
+  state.chartRange = days;
+  ['1','7','30','90'].forEach(d => {
+    const btn = document.getElementById('r-' + d);
+    if (btn) btn.classList.toggle('active', parseInt(d) === days);
+  });
+  api('/api/equity?days=' + days).then(data => {
+    state.equity = data || [];
+    renderChart();
+  }).catch(e => console.error(e));
+}
+
+function renderChart() {
+  const canvas = document.getElementById('equity-chart');
+  if (!canvas) return;
+  const data = state.equity;
+
+  if (state.chart) { state.chart.destroy(); state.chart = null; }
+  if (!data.length) {
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#4A4866';
+    ctx.font = '13px Inter';
+    ctx.textAlign = 'center';
+    ctx.fillText('Noch keine Equity-Daten im Zeitraum', canvas.width / 2, canvas.height / 2);
+    return;
+  }
+
+  const labels = data.map(d => new Date(d.time));
+  const equityValues = data.map(d => d.equity);
+  const upnlValues = data.map(d => d.upnl);
+
+  state.chart = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Equity',
+          data: equityValues,
+          borderColor: '#00D4AA',
+          backgroundColor: 'rgba(0,212,170,0.08)',
+          borderWidth: 2,
+          fill: true,
+          tension: 0.25,
+          pointRadius: 0,
+          pointHoverRadius: 5,
+          pointHoverBackgroundColor: '#00D4AA',
+          pointHoverBorderColor: '#09090E',
+          pointHoverBorderWidth: 2,
+        },
+        {
+          label: 'Unrealisiertes PnL',
+          data: upnlValues,
+          borderColor: '#C8B8FF',
+          backgroundColor: 'transparent',
+          borderWidth: 1.5,
+          borderDash: [4, 4],
+          fill: false,
+          tension: 0.25,
+          pointRadius: 0,
+          pointHoverRadius: 4,
+          yAxisID: 'y1',
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          display: true,
+          position: 'top',
+          align: 'end',
+          labels: { color: '#8884A4', font: { size: 12, family: 'Inter' }, boxWidth: 12, boxHeight: 12, padding: 14 }
+        },
+        tooltip: {
+          backgroundColor: '#111118',
+          borderColor: '#1E1E2E',
+          borderWidth: 1,
+          titleColor: '#F0EEF8',
+          bodyColor: '#8884A4',
+          padding: 12,
+          cornerRadius: 8,
+          titleFont: { family: 'Inter', size: 12 },
+          bodyFont: { family: 'JetBrains Mono', size: 12 },
+          callbacks: {
+            title: (items) => new Date(items[0].parsed.x).toLocaleString('de-DE'),
+            label: (item) => ' ' + item.dataset.label + ': $' + item.parsed.y.toFixed(2),
+          }
+        }
+      },
+      scales: {
+        x: {
+          type: 'time',
+          time: { unit: state.chartRange <= 1 ? 'hour' : (state.chartRange <= 7 ? 'day' : 'week') },
+          grid: { color: '#1A1A24', drawTicks: false },
+          ticks: { color: '#4A4866', font: { family: 'JetBrains Mono', size: 11 }, maxRotation: 0 },
+          border: { color: '#1E1E2E' }
+        },
+        y: {
+          position: 'left',
+          grid: { color: '#1A1A24', drawTicks: false },
+          ticks: { color: '#4A4866', font: { family: 'JetBrains Mono', size: 11 }, callback: v => '$' + v.toFixed(0) },
+          border: { color: '#1E1E2E' }
+        },
+        y1: {
+          position: 'right',
+          grid: { display: false },
+          ticks: { color: '#4A4866', font: { family: 'JetBrains Mono', size: 11 }, callback: v => (v >= 0 ? '+' : '') + '$' + v.toFixed(0) },
+          border: { color: '#1E1E2E' }
+        }
+      }
     }
   });
 }
 
-// ── CALENDAR
-function moveMonth(d){ calM+=d; if(calM<0){calM=11;calY--;} if(calM>11){calM=0;calY++;} renderCal(); }
-function renderCal(){
-  const mn=['January','February','March','April','May','June','July','August','September','October','November','December'];
-  document.getElementById('calLabel').textContent=mn[calM]+' '+calY;
-  const dm={};
-  for(const t of trades){
-    if(t.status!=='closed'||!t.closeTime)continue;
-    const d=new Date(t.closeTime);
-    if(d.getFullYear()!==calY||d.getMonth()!==calM)continue;
-    dm[d.getDate()]=(dm[d.getDate()]||0)+(t.pnl||0);
+const sections = ['overview', 'positions', 'history', 'equity', 'balance'];
+const sectionTitles = {
+  overview: ['Übersicht', 'Live Trading Performance'],
+  positions: ['Offene Positionen', 'Aktive Trades auf Bitget'],
+  history: ['Trade-Verlauf', 'Alle Trades inkl. Events'],
+  equity: ['Equity Chart', 'Verlauf von Account & PnL'],
+  balance: ['Balance', 'Kontostand & Auslastung'],
+};
+
+function showSection(name) {
+  sections.forEach(s => {
+    document.getElementById('section-' + s).style.display = s === name ? 'block' : 'none';
+    const nav = document.getElementById('nav-' + s);
+    if (nav) nav.classList.toggle('active', s === name);
+  });
+  const [title, sub] = sectionTitles[name] || ['', ''];
+  document.getElementById('section-title').textContent = title;
+  document.getElementById('section-sub').textContent = sub;
+}
+
+// Chart.js time adapter (small inline date-fns-style)
+Chart.register({
+  id: 'simpleTimeAdapter',
+});
+// Fallback: convert dates to timestamps and use linear scale
+// Actually we use 'time' scale — Chart.js needs an adapter, let's use a simpler approach: convert to category labels
+
+// Override: use category scale instead of time to avoid adapter dependency
+function renderChartSimple() {
+  const canvas = document.getElementById('equity-chart');
+  if (!canvas) return;
+  const data = state.equity;
+
+  if (state.chart) { state.chart.destroy(); state.chart = null; }
+  if (!data.length) {
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#4A4866';
+    ctx.font = '13px Inter';
+    ctx.textAlign = 'center';
+    ctx.fillText('Noch keine Equity-Daten im Zeitraum', canvas.width / 2, canvas.height / 2);
+    return;
   }
-  const first=new Date(calY,calM,1).getDay();
-  const dim=new Date(calY,calM+1,0).getDate();
-  const off=first===0?6:first-1;
-  const today=new Date(), isCur=today.getFullYear()===calY&&today.getMonth()===calM;
-  let html='';
-  for(let i=0;i<off;i++) html+='<div></div>';
-  for(let day=1;day<=dim;day++){
-    const pnl=dm[day], isT=isCur&&today.getDate()===day;
-    let cls='aspect-square rounded-xl flex flex-col items-center justify-center cursor-pointer transition hover:bg-[#161616] ';
-    if(isT) cls+='ring-1 ring-[#333] ';
-    if(pnl!==undefined) cls+= pnl>=0?'bg-green-500/[.07] hover:bg-green-500/10':'bg-red-500/[.06] hover:bg-red-500/10';
-    const sub=pnl!==undefined?`<span class="text-[9px] font-semibold ${pnl>=0?'text-green-500':'text-red-500'} leading-none mt-0.5">${pnl>=0?'+':''}$${Math.abs(pnl).toFixed(0)}</span>`:'';
-    html+=`<div class="${cls}" onclick="openDay(${day})"><span class="text-[12px] font-medium text-[#888]">${day}</span>${sub}</div>`;
-  }
-  document.getElementById('calGrid').innerHTML=html;
-}
-function openDay(day){
-  const dt=trades.filter(t=>{if(!t.closeTime)return false;const d=new Date(t.closeTime);return d.getFullYear()===calY&&d.getMonth()===calM&&d.getDate()===day;});
-  if(!dt.length)return;
-  const pnl=dt.reduce((s,t)=>s+(t.pnl||0),0);
-  const mn=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  document.getElementById('modalTitle').textContent=`${day} ${mn[calM]} ${calY}`;
-  document.getElementById('modalBody').innerHTML=`
-    <div class="flex gap-6 mb-5 p-4 rounded-xl bg-[#161616]">
-      <div><p class="text-[11px] text-[#444] mb-1">Trades</p><p class="text-[18px] font-semibold">${dt.length}</p></div>
-      <div><p class="text-[11px] text-[#444] mb-1">P&L</p><p class="text-[18px] font-semibold ${pnl>=0?'text-green-500':'text-red-500'}">${pnl>=0?'+':''}${fmt(pnl)}</p></div>
-    </div>
-    ${dt.map(t=>`<div class="flex justify-between items-center py-3 border-b border-[#1a1a1a] last:border-0">
-      <div><p class="text-[14px] font-medium">${t.asset}</p><p class="text-[12px] text-[#444] mt-0.5">${t.direction} · $${t.entry} · ${t.closeReason||'—'}</p></div>
-      <p class="text-[14px] font-semibold ${t.pnl>=0?'text-green-500':'text-red-500'}">${t.pnl>=0?'+':''}${fmt(t.pnl)}</p>
-    </div>`).join('')}`;
-  document.getElementById('modal').classList.remove('hidden');
-}
-function closeModal(){ document.getElementById('modal').classList.add('hidden'); }
 
-// ── POSITIONS
-function renderPositions(){
-  document.getElementById('posCount').textContent=positions.length+' open';
-  if(!positions.length){ document.getElementById('positions').innerHTML=empty('No open positions'); return; }
-  document.getElementById('positions').innerHTML=positions.map((p,i)=>{
-    const upnl=parseFloat(p.unrealizedPL||0), rl=parseFloat(p.achievedProfits||0);
-    const isL=p.holdSide==='long';
-    const t=trades.find(t=>t.asset===p.symbol.replace('USDT','')&&t.status==='open');
-    const tpStr=t?.targets?.length?t.targets.map((tp,j)=>`TP${j+1} $${tp.price}`).join(' · '):'—';
-    return `<details>
-      <summary class="flex items-center justify-between px-6 py-4 hover:bg-[#111] transition border-b border-[#1a1a1a]">
-        <div class="flex items-center gap-3">
-          <span class="text-[14px] font-medium">${p.symbol}</span>
-          <span class="text-[11px] font-medium px-2 py-0.5 rounded-md ${isL?'text-green-500 bg-green-500/10':'text-red-500 bg-red-500/10'}">${isL?'Long':'Short'}</span>
-        </div>
-        <div class="flex items-center gap-3">
-          <span class="text-[15px] font-semibold ${upnl>=0?'text-green-500':'text-red-500'}">${upnl>=0?'+':''}${fmt(upnl)}</span>
-          <svg class="chevron w-3.5 h-3.5 text-[#333]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
-        </div>
-      </summary>
-      <div class="px-6 pb-5 pt-4 grid grid-cols-3 gap-4 bg-[#0a0a0a] border-b border-[#1a1a1a]">
-        ${kv('Entry','$'+parseFloat(p.openPriceAvg).toFixed(4))}
-        ${kv('Size',p.total)}
-        ${kv('Stop Loss',t?.stopLoss?'$'+t.stopLoss:'—','text-red-500')}
-        ${kv('Take Profits',tpStr)}
-        ${kv('Unrealized',(upnl>=0?'+':'')+fmt(upnl),upnl>=0?'text-green-500':'text-red-500')}
-        ${kv('Realized',(rl>=0?'+':'')+fmt(rl),rl>=0?'text-green-500':'text-red-500')}
-      </div>
-    </details>`;
-  }).join('');
-}
+  const labels = data.map(d => {
+    const dt = new Date(d.time);
+    return state.chartRange <= 1
+      ? dt.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
+      : dt.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }) + ' ' + dt.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+  });
+  const equityValues = data.map(d => parseFloat(d.equity));
+  const upnlValues = data.map(d => parseFloat(d.upnl));
 
-// ── HISTORY
-function renderHistory(){
-  const open=trades.filter(t=>t.status==='open');
-  const closed=trades.filter(t=>t.status==='closed').slice(-40).reverse();
-  const all=[...open,...closed];
-  document.getElementById('tradeCount').textContent=all.length+' trades';
-  if(!all.length){ document.getElementById('history').innerHTML=empty('No trades yet'); return; }
-  const edot=e=>e.type.includes('TP')?'bg-green-500':e.type==='SL'?'bg-red-500':e.type.includes('BE')?'bg-blue-500':'bg-[#333]';
-  document.getElementById('history').innerHTML=all.map((t,i)=>{
-    const sc=t.status==='open'?'text-[#f59e0b]':t.pnl>0?'text-green-500':'text-red-500';
-    const sl=t.status==='open'?'Open':t.pnl>0?'Win':'Loss';
-    const evHtml=t.events?.length?`<div class="mt-4 space-y-1.5">
-      ${t.events.map(e=>`<div class="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-[#111] text-[11px]">
-        <span class="w-1.5 h-1.5 rounded-full flex-shrink-0 ${edot(e)}"></span>
-        <span class="font-medium min-w-[90px] text-[#aaa]">${e.type}</span>
-        <span class="text-[#444] flex-1">@ $${e.price}</span>
-        <span class="font-medium ${(e.pnl||0)>=0?'text-green-500':'text-red-500'}">${(e.pnl||0)>=0?'+':''}${fmt(e.pnl||0)}</span>
-        <span class="text-[#333]">${new Date(e.time).toLocaleString('de-DE',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</span>
-      </div>`).join('')}</div>`:'';
-    return `<details>
-      <summary class="flex items-center justify-between px-6 py-4 hover:bg-[#111] transition border-b border-[#1a1a1a]">
-        <div class="flex items-center gap-2.5">
-          <span class="text-[14px] font-medium">${t.asset}</span>
-          <span class="text-[11px] font-medium px-2 py-0.5 rounded-md ${t.direction==='Long'?'text-green-500 bg-green-500/10':'text-red-500 bg-red-500/10'}">${t.direction}</span>
-          <span class="text-[12px] ${sc}">${sl}</span>
-        </div>
-        <div class="flex items-center gap-3">
-          <span class="text-[14px] font-semibold ${t.pnl>=0?'text-green-500':'text-red-500'}">${t.pnl>=0?'+':''}${fmt(t.pnl)}</span>
-          <svg class="chevron w-3.5 h-3.5 text-[#333]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
-        </div>
-      </summary>
-      <div class="px-6 pb-5 pt-4 grid grid-cols-3 gap-4 bg-[#0a0a0a] border-b border-[#1a1a1a]">
-        ${kv('Entry','$'+t.entry)}
-        ${kv('Stop Loss','$'+t.stopLoss,'text-red-500')}
-        ${kv('Take Profits',t.targets?.map((tp,j)=>`TP${j+1} $${tp.price}`).join('<br>')||'—')}
-        ${kv('P&L',(t.pnl>=0?'+':'')+fmt(t.pnl),t.pnl>=0?'text-green-500':'text-red-500')}
-        ${kv('Opened',fmtDate(t.openTime))}
-        ${kv('Closed',t.closeTime?fmtDate(t.closeTime):'—')}
-        ${t.closeReason?kv('Reason',t.closeReason):''}
-      </div>
-      ${evHtml?`<div class="px-6 pb-5 bg-[#0a0a0a] border-b border-[#1a1a1a]">${evHtml}</div>`:''}
-    </details>`;
-  }).join('');
-}
-
-// ── AWARDS
-function renderAwards(){
-  const closed=trades.filter(t=>t.status==='closed');
-  if(!closed.length){ document.getElementById('awards').innerHTML='<p class="col-span-4 text-center text-[13px] text-[#333] py-4">No closed trades yet</p>'; return; }
-  const sorted=[...closed].sort((a,b)=>b.pnl-a.pnl);
-  const best=sorted[0], sec=sorted[1], worst=sorted[sorted.length-1];
-  const avg=closed.reduce((s,t)=>s+t.pnl,0)/closed.length;
-  document.getElementById('awards').innerHTML=[
-    best  ? aw('🥇','Best Trade',best.asset,'+'+fmt(best.pnl),'text-green-500',best.direction,best.openTime):'',
-    sec   ? aw('🥈','Runner-up',sec.asset,'+'+fmt(sec.pnl),'text-green-500',sec.direction,sec.openTime):'',
-    worst ? aw('📉','Worst Trade',worst.asset,fmt(worst.pnl),'text-red-500',worst.direction,worst.openTime):'',
-    `<div class="rounded-xl bg-[#111] border border-[#1a1a1a] p-4">
-      <p class="text-[16px] mb-2">📊</p>
-      <p class="text-[11px] text-[#444] mb-1">Avg P&L / Trade</p>
-      <p class="text-[17px] font-semibold ${avg>=0?'text-green-500':'text-red-500'}">${avg>=0?'+':''}${fmt(avg)}</p>
-      <p class="text-[12px] text-[#333] mt-1">${closed.length} trades</p>
-    </div>`
-  ].join('');
-}
-function aw(icon,label,name,val,vc,dir,time){
-  return `<div class="rounded-xl bg-[#111] border border-[#1a1a1a] p-4">
-    <p class="text-[16px] mb-2">${icon}</p>
-    <p class="text-[11px] text-[#444] mb-1">${label}</p>
-    <p class="text-[15px] font-semibold mb-0.5">${name}</p>
-    <p class="text-[15px] font-semibold ${vc}">${val}</p>
-    <p class="text-[12px] text-[#333] mt-1">${dir} · ${new Date(time).toLocaleDateString('de-DE')}</p>
-  </div>`;
-}
-
-// ── UTILS
-function fmt(n){ return '$'+parseFloat(n).toFixed(2); }
-function fmtDate(ts){ return new Date(ts).toLocaleString('de-DE',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}); }
-function kv(label,val,vc='text-[#f0f0f0]'){
-  return `<div><p class="text-[10px] text-[#333] uppercase tracking-widest font-medium mb-1.5">${label}</p><p class="text-[13px] font-medium ${vc}">${val}</p></div>`;
-}
-function empty(msg){ return `<p class="px-6 py-8 text-[13px] text-[#333] text-center">${msg}</p>`; }
-function toggle(sel,btn){
-  document.querySelectorAll(sel).forEach(b=>{
-    b.className = b===btn
-      ? b.className.replace('text-[#444] hover:text-[#999]','text-[#f0f0f0] font-medium')+' bg-[#1a1a1a]'
-      : b.className.replace('bg-[#1a1a1a]','').replace('text-[#f0f0f0] font-medium','text-[#444] hover:text-[#999]');
+  state.chart = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Equity',
+          data: equityValues,
+          borderColor: '#00D4AA',
+          backgroundColor: 'rgba(0,212,170,0.08)',
+          borderWidth: 2,
+          fill: true,
+          tension: 0.25,
+          pointRadius: 0,
+          pointHoverRadius: 5,
+          pointHoverBackgroundColor: '#00D4AA',
+          pointHoverBorderColor: '#09090E',
+          pointHoverBorderWidth: 2,
+        },
+        {
+          label: 'Unrealisiertes PnL',
+          data: upnlValues,
+          borderColor: '#C8B8FF',
+          backgroundColor: 'transparent',
+          borderWidth: 1.5,
+          borderDash: [4, 4],
+          fill: false,
+          tension: 0.25,
+          pointRadius: 0,
+          pointHoverRadius: 4,
+          yAxisID: 'y1',
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          display: true,
+          position: 'top',
+          align: 'end',
+          labels: { color: '#8884A4', font: { size: 12, family: 'Inter' }, boxWidth: 12, boxHeight: 12, padding: 14 }
+        },
+        tooltip: {
+          backgroundColor: '#111118',
+          borderColor: '#1E1E2E',
+          borderWidth: 1,
+          titleColor: '#F0EEF8',
+          bodyColor: '#8884A4',
+          padding: 12,
+          cornerRadius: 8,
+          titleFont: { family: 'Inter', size: 12 },
+          bodyFont: { family: 'JetBrains Mono', size: 12 },
+          callbacks: {
+            label: (item) => ' ' + item.dataset.label + ': $' + item.parsed.y.toFixed(2),
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: '#1A1A24', drawTicks: false },
+          ticks: {
+            color: '#4A4866',
+            font: { family: 'JetBrains Mono', size: 11 },
+            maxRotation: 0,
+            autoSkip: true,
+            maxTicksLimit: 8,
+          },
+          border: { color: '#1E1E2E' }
+        },
+        y: {
+          position: 'left',
+          grid: { color: '#1A1A24', drawTicks: false },
+          ticks: { color: '#4A4866', font: { family: 'JetBrains Mono', size: 11 }, callback: v => '$' + v.toFixed(0) },
+          border: { color: '#1E1E2E' },
+          title: { display: true, text: 'Equity', color: '#8884A4', font: { family: 'Inter', size: 11 } }
+        },
+        y1: {
+          position: 'right',
+          grid: { display: false },
+          ticks: { color: '#4A4866', font: { family: 'JetBrains Mono', size: 11 }, callback: v => (v >= 0 ? '+' : '') + '$' + v.toFixed(0) },
+          border: { color: '#1E1E2E' },
+          title: { display: true, text: 'PnL', color: '#8884A4', font: { family: 'Inter', size: 11 } }
+        }
+      }
+    }
   });
 }
+
+// Use simple chart instead of time-based
+renderChart = renderChartSimple;
+
+// Initial load + auto-refresh
+refreshAll();
+setInterval(refreshAll, 30000);
 </script>
 </body>
 </html>
