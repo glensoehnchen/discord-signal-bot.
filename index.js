@@ -21,8 +21,13 @@ const BITGET_PASSPHRASE = process.env.BITGET_PASSPHRASE;
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
-let RISK_USD = parseFloat(process.env.RISK_USD) || 40;
-let TEST_RISK_USD = parseFloat(process.env.RISK_USD) || 40;
+// ─── Dashboard Login ───────────────────────────────────────
+const DASHBOARD_USERNAME = process.env.DASHBOARD_USERNAME || 'Erik';
+const DASHBOARD_PASSWORD = process.env.DASHBOARD_PASSWORD || 'pumper2026';
+
+// ─── Risk als PROZENT vom Kontostand ───────────────────────
+let RISK_PERCENT = 1;        // Default 1%
+let TEST_RISK_PERCENT = 1;   // Default 1%
 let MAX_POSITION_USD = parseFloat(process.env.MAX_POSITION_USD) || 5000;
 const LEVERAGE = '1';
 let botPaused = false;
@@ -39,15 +44,15 @@ function loadSettings() {
   try {
     if (fs.existsSync(SETTINGS_FILE)) {
       const s = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
-      if (s.RISK_USD) { RISK_USD = s.RISK_USD; console.log(`⚙️ Risk geladen: $${RISK_USD}`); }
-      if (s.TEST_RISK_USD) { TEST_RISK_USD = s.TEST_RISK_USD; console.log(`⚙️ Test Risk geladen: $${TEST_RISK_USD}`); }
+      if (s.RISK_PERCENT != null) { RISK_PERCENT = s.RISK_PERCENT; console.log(`⚙️ Risk geladen: ${RISK_PERCENT}%`); }
+      if (s.TEST_RISK_PERCENT != null) { TEST_RISK_PERCENT = s.TEST_RISK_PERCENT; console.log(`⚙️ Test Risk geladen: ${TEST_RISK_PERCENT}%`); }
     }
   } catch (e) { console.error('Settings load Fehler:', e.message); }
 }
 
 function saveSettings() {
   try {
-    fs.writeFileSync(SETTINGS_FILE, JSON.stringify({ RISK_USD, TEST_RISK_USD, updatedAt: new Date().toISOString() }));
+    fs.writeFileSync(SETTINGS_FILE, JSON.stringify({ RISK_PERCENT, TEST_RISK_PERCENT, updatedAt: new Date().toISOString() }));
   } catch (e) { console.error('Settings save Fehler:', e.message); }
 }
 
@@ -68,7 +73,7 @@ function saveTrades() {
   catch (e) { console.error('Save error:', e.message); }
 }
 
-function addTrade(signal, entryPrice, totalSize) {
+function addTrade(signal, entryPrice, totalSize, isTest = false) {
   const trade = {
     id: Date.now().toString(),
     asset: signal.asset,
@@ -77,6 +82,7 @@ function addTrade(signal, entryPrice, totalSize) {
     stopLoss: signal.stopLoss,
     targets: signal.targets || [],
     totalSize,
+    isTest,
     openTime: new Date().toISOString(),
     status: 'open',
     closeTime: null,
@@ -120,17 +126,25 @@ async function saveBalanceSnapshot() {
     if (!b) return;
     const pos = await getPositions();
     const upnl = pos.reduce((s, p) => s + parseFloat(p.unrealizedPL || 0), 0);
-    balanceHistory.push({
-      time: new Date().toISOString(),
-      equity: parseFloat(b.accountEquity || 0),
-      upnl: parseFloat(upnl.toFixed(2))
-    });
+    balanceHistory.push({ time: new Date().toISOString(), equity: parseFloat(b.accountEquity || 0), upnl: parseFloat(upnl.toFixed(2)) });
     if (balanceHistory.length > 10000) balanceHistory = balanceHistory.slice(-10000);
     fs.writeFileSync(BALANCE_FILE, JSON.stringify(balanceHistory));
   } catch (e) { console.error('Balance snapshot Fehler:', e.message); }
 }
 
-// ─── Express ───────────────────────────────────────────────
+// ─── Express + Basic Auth ──────────────────────────────────
+function basicAuth(req, res, next) {
+  const auth = req.headers.authorization;
+  if (!auth) { res.set('WWW-Authenticate', 'Basic realm="Trading Dashboard"'); return res.status(401).send('Login erforderlich'); }
+  try {
+    const [user, pass] = Buffer.from(auth.split(' ')[1], 'base64').toString().split(':');
+    if (user === DASHBOARD_USERNAME && pass === DASHBOARD_PASSWORD) return next();
+  } catch (e) {}
+  res.set('WWW-Authenticate', 'Basic realm="Trading Dashboard"');
+  return res.status(401).send('Falsche Login-Daten');
+}
+app.use(basicAuth);
+
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'dashboard.html')));
 app.get('/health', (req, res) => res.json({ status: 'ok', bot: 'running', paused: botPaused }));
 app.get('/api/trades', (req, res) => res.json(trades));
@@ -161,6 +175,18 @@ async function notify(msg) {
   catch (e) { console.error('TG Error:', e.message); }
 }
 
+// Berechnet die aktuelle Risk in Dollar aus dem %-Wert
+async function getRiskUSD(isTest = false) {
+  const percent = isTest ? TEST_RISK_PERCENT : RISK_PERCENT;
+  try {
+    const balance = await getBalance();
+    const equity = parseFloat(balance.accountEquity || 0);
+    return { riskUSD: equity * percent / 100, equity, percent };
+  } catch (e) {
+    return { riskUSD: 0, equity: 0, percent };
+  }
+}
+
 async function sendDailyReport() {
   try {
     const now = new Date();
@@ -174,10 +200,10 @@ async function sendDailyReport() {
     let report = `📊 <b>Daily Report – ${now.toLocaleDateString('de-DE')}</b>\n\n`;
     report += `📂 <b>Heute geöffnet (${todayTrades.length})</b>\n`;
     if (!todayTrades.length) { report += `Keine\n`; }
-    else { for (const t of todayTrades) { const pos = positions.find(p => p.symbol === t.asset + 'USDT'); const pnl = pos ? parseFloat(pos.unrealizedPL) : t.pnl; report += `${pnl >= 0 ? '🟢' : '🔴'} ${t.asset} ${t.direction} | ${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}\n`; } }
+    else { for (const t of todayTrades) { const pos = positions.find(p => p.symbol === t.asset + 'USDT'); const pnl = pos ? parseFloat(pos.unrealizedPL) : t.pnl; report += `${t.isTest ? '🧪 ' : ''}${pnl >= 0 ? '🟢' : '🔴'} ${t.asset} ${t.direction} | ${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}\n`; } }
     report += `\n📌 <b>Laufende Trades (${runningTrades.length})</b>\n`;
     if (!runningTrades.length) { report += `Keine\n`; }
-    else { for (const t of runningTrades) { const pos = positions.find(p => p.symbol === t.asset + 'USDT'); const pnl = pos ? parseFloat(pos.unrealizedPL) : t.pnl; const d = Math.floor((now - new Date(t.openTime)) / 86400000); report += `${pnl >= 0 ? '🟢' : '🔴'} ${t.asset} ${t.direction} | ${d}d | ${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}\n`; } }
+    else { for (const t of runningTrades) { const pos = positions.find(p => p.symbol === t.asset + 'USDT'); const pnl = pos ? parseFloat(pos.unrealizedPL) : t.pnl; const d = Math.floor((now - new Date(t.openTime)) / 86400000); report += `${t.isTest ? '🧪 ' : ''}${pnl >= 0 ? '🟢' : '🔴'} ${t.asset} ${t.direction} | ${d}d | ${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}\n`; } }
     report += `\n📈 <b>Entwicklung</b>\n`;
     if (!allOpen.length) { report += `Keine offenen Positionen`; }
     else {
@@ -219,6 +245,18 @@ function extractMessageContent(message) {
     }
   }
   return { text: text.trim(), imageUrl };
+}
+
+// FIX: Echten Bildtyp aus Magic Bytes erkennen
+function detectMediaType(buffer) {
+  const arr = new Uint8Array(buffer).subarray(0, 4);
+  let header = '';
+  for (const b of arr) header += b.toString(16).padStart(2, '0');
+  if (header.startsWith('ffd8ff')) return 'image/jpeg';
+  if (header.startsWith('89504e47')) return 'image/png';
+  if (header.startsWith('47494638')) return 'image/gif';
+  if (header.startsWith('52494646')) return 'image/webp';
+  return 'image/jpeg';
 }
 
 // ─── Bitget Helpers ────────────────────────────────────────
@@ -268,6 +306,17 @@ async function getPositions() {
   return r.data.data.filter(p => parseFloat(p.total) > 0);
 }
 
+async function getPlanOrders(fullSymbol) {
+  try {
+    const timestamp = Date.now().toString();
+    const path = '/api/v2/mix/order/orders-plan-pending';
+    const queryString = `?symbol=${fullSymbol}&productType=USDT-FUTURES`;
+    const r = await axios.get(`https://api.bitget.com${path}${queryString}`, { headers: bitgetGetHeaders(timestamp, path, queryString) });
+    const orders = r.data.data?.entrustedList || r.data.data || [];
+    return orders.sort((a, b) => parseFloat(a.triggerPrice) - parseFloat(b.triggerPrice));
+  } catch (e) { return []; }
+}
+
 async function setLeverage(symbol) {
   const timestamp = Date.now().toString();
   const path = '/api/v2/mix/account/set-leverage';
@@ -279,12 +328,10 @@ async function setLeverage(symbol) {
 async function aiRetry(action, failedBody, failedPath, direction, asset, errorMsg, attempt = 1) {
   if (attempt > 3) {
     console.log(`🛑 AI Retry aufgegeben nach 3 Versuchen | ${asset}`);
-    await notify(`🛑 <b>AI Retry gescheitert (3x)</b>\nAsset: ${asset}\nAction: ${action}\nLetzter Fehler: ${errorMsg}`);
+    await notify(`🛑 <b>AI Retry gescheitert (3x)</b>\nAsset: ${asset}\nAction: ${action}\nFehler: ${errorMsg}`);
     return false;
   }
-
   console.log(`🤖 AI Retry Versuch ${attempt}/3 | ${asset} | ${action}`);
-
   try {
     let positionContext = 'keine offene Position';
     try {
@@ -307,71 +354,56 @@ Fehlgeschlagener Call:
 - Fehlermeldung: ${errorMsg}
 - Asset: ${asset}
 - Direction: ${direction}
-- Aktuelle Position bei Bitget: ${positionContext}
+- Aktuelle Position: ${positionContext}
 
-Fixes für häufige Fehler:
-- "order quantity too small" / size Fehler → size auf Minimum erhöhen (BTC: 0.001, ETH: 0.01, andere: 1)
-- "holdSide" Fehler → Long = "long", Short = "short" – korrekt setzen
-- "position not exist" → closePosition via /api/v2/mix/order/close-positions statt plan order
-- "plan order already triggered" → direkt market close, kein cancel nötig
-- "price" Fehler bei TP → triggerPrice anpassen
-- "insufficient" → size reduzieren
+Bekannte korrekte Bitget V2 Endpoints:
+- Order: /api/v2/mix/order/place-order
+- Plan Order (TP): /api/v2/mix/order/place-plan-order
+- SL/TP auf Position: /api/v2/mix/order/place-tpsl-order (braucht size!)
+- Position schließen: /api/v2/mix/order/close-positions
+- Plan Order canceln: /api/v2/mix/order/cancel-plan-order
 
-Antworte NUR in JSON ohne Markdown:
-{
-  "fixDescription": "1 Satz was gefixt wurde",
-  "path": "/api/v2/mix/order/...",
-  "method": "POST",
-  "body": { ... korrigierter body ... },
-  "skip": false
-}
+Häufige Fixes:
+- "order quantity too small" → size erhöhen
+- "holdSide" Fehler → Long="long", Short="short"
+- "position not exist" → close-positions
+- "plan order already triggered" → direkt market close
+- "Parameter size cannot be empty" → size aus Position hinzufügen
 
-Wenn nicht fixbar (keine Position, duplicate, auth Fehler): { "skip": true, "fixDescription": "Grund" }`
+Antworte NUR in JSON:
+{"fixDescription":"1 Satz","path":"/api/v2/...","body":{...},"skip":false}
+Wenn nicht fixbar: {"skip":true,"fixDescription":"Grund"}`
       }]
-    }, {
-      headers: { 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' }
-    });
+    }, { headers: { 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' } });
 
     const raw = response.data.content[0].text.replace(/```json|```/g, '').trim();
     const fix = JSON.parse(raw);
-
-    if (fix.skip) {
-      console.log(`⏭️ AI Retry skip: ${fix.fixDescription}`);
-      return false;
-    }
-
+    if (fix.skip) { console.log(`⏭️ AI Retry skip: ${fix.fixDescription}`); return false; }
     console.log(`🤖 AI Fix V${attempt}: ${fix.fixDescription}`);
-
     const fixBodyStr = JSON.stringify(fix.body);
-    await axios.post(`https://api.bitget.com${fix.path}`, fixBodyStr, {
-      headers: bitgetHeaders(Date.now().toString(), fix.path, fixBodyStr)
-    });
-
+    await axios.post(`https://api.bitget.com${fix.path}`, fixBodyStr, { headers: bitgetHeaders(Date.now().toString(), fix.path, fixBodyStr) });
     console.log(`✅ AI Retry V${attempt} erfolgreich: ${fix.fixDescription}`);
     await notify(`🤖 <b>AI Retry erfolgreich (V${attempt})</b>\n${asset} | ${fix.fixDescription}`);
     return true;
-
   } catch (retryErr) {
     const retryErrMsg = retryErr.response?.data?.msg || retryErr.message;
-    const retryErrFull = retryErr.response?.data;
     console.error(`❌ AI Retry V${attempt} fehlgeschlagen: ${retryErrMsg}`);
-    console.error(`❌ Bitget Response:`, JSON.stringify(retryErrFull));
+    console.error(`❌ Bitget Response:`, JSON.stringify(retryErr.response?.data));
     await new Promise(r => setTimeout(r, 2000));
     return aiRetry(action, failedBody, failedPath, direction, asset, retryErrMsg, attempt + 1);
   }
 }
 
 // ─── Order Placement ───────────────────────────────────────
-async function placeOrder(symbol, direction, stopLoss, targets, riskOverride) {
+async function placeOrder(symbol, direction, stopLoss, targets, riskUSD) {
   const fullSymbol = symbol + 'USDT';
   const price = await getPrice(symbol);
   const precision = await getSizePrecision(symbol);
-  const riskAmount = riskOverride || RISK_USD;
   const riskPerUnit = Math.abs(price - stopLoss);
-  let totalSize = riskAmount / riskPerUnit;
+  let totalSize = riskUSD / riskPerUnit;
   if (totalSize * price > MAX_POSITION_USD) totalSize = MAX_POSITION_USD / price;
 
-  console.log(`📐 Size: ${totalSize.toFixed(precision)} ${symbol} | Notional: $${(totalSize * price).toFixed(2)} | Risk: $${riskAmount}`);
+  console.log(`📐 Size: ${totalSize.toFixed(precision)} ${symbol} | Notional: $${(totalSize * price).toFixed(2)} | Risk: $${riskUSD.toFixed(2)}`);
 
   const mainBody = {
     symbol: fullSymbol, productType: 'USDT-FUTURES', marginMode: 'isolated',
@@ -379,8 +411,8 @@ async function placeOrder(symbol, direction, stopLoss, targets, riskOverride) {
     side: direction === 'Long' ? 'buy' : 'sell', tradeSide: 'open',
     orderType: 'market', presetStopLossPrice: stopLoss.toString()
   };
-
   const mainPath = '/api/v2/mix/order/place-order';
+
   try {
     await axios.post(`https://api.bitget.com${mainPath}`, JSON.stringify(mainBody), { headers: bitgetHeaders(Date.now().toString(), mainPath, JSON.stringify(mainBody)) });
     console.log(`✅ Haupt-Order platziert`);
@@ -393,7 +425,6 @@ async function placeOrder(symbol, direction, stopLoss, targets, riskOverride) {
 
   await new Promise(r => setTimeout(r, 5000));
 
-  // TP Validation gegen Live-Preis
   let validTargets = (targets || []).filter(tp =>
     direction === 'Long' ? tp.price > price : tp.price < price
   );
@@ -409,7 +440,6 @@ async function placeOrder(symbol, direction, stopLoss, targets, riskOverride) {
       const tp = validTargets[i];
       const tpSize = (totalSize * distribution[i] / 100).toFixed(precision);
       await new Promise(r => setTimeout(r, 800));
-
       const tpBody = {
         symbol: fullSymbol, productType: 'USDT-FUTURES', marginMode: 'isolated',
         marginCoin: 'USDT', side: closeSide, holdSide,
@@ -417,7 +447,6 @@ async function placeOrder(symbol, direction, stopLoss, targets, riskOverride) {
         triggerPrice: tp.price.toString(), triggerType: 'mark_price', planType: 'normal_plan'
       };
       const tpPath = '/api/v2/mix/order/place-plan-order';
-
       try {
         await axios.post(`https://api.bitget.com${tpPath}`, JSON.stringify(tpBody), { headers: bitgetHeaders(Date.now().toString(), tpPath, JSON.stringify(tpBody)) });
         console.log(`🎯 TP${i + 1}: ${tpSize} ${symbol} @ $${tp.price} (${distribution[i]}%)`);
@@ -441,29 +470,28 @@ async function closePosition(symbol) {
 }
 
 async function moveSlToBreakeven(symbol, direction, entryPrice) {
-  const slPath = '/api/v2/mix/order/place-tpsl';
+  const fullSymbol = symbol + 'USDT';
+  const positions = await getPositions();
+  const pos = positions.find(p => p.symbol === fullSymbol);
+  if (!pos) throw new Error(`Position ${symbol} nicht gefunden für BE`);
+  const precision = await getSizePrecision(symbol);
+  const size = parseFloat(pos.total).toFixed(precision);
+
+  const slPath = '/api/v2/mix/order/place-tpsl-order';
   const slBody = {
-    symbol: symbol + 'USDT', productType: 'USDT-FUTURES', marginCoin: 'USDT',
+    symbol: fullSymbol, productType: 'USDT-FUTURES', marginCoin: 'USDT',
     planType: 'loss_plan', triggerPrice: entryPrice.toString(),
-    triggerType: 'mark_price', holdSide: direction === 'Long' ? 'long' : 'short'
+    triggerType: 'mark_price', holdSide: direction === 'Long' ? 'long' : 'short',
+    size: size
   };
-  try {
-    const r = await axios.post(`https://api.bitget.com${slPath}`, JSON.stringify(slBody), { headers: bitgetHeaders(Date.now().toString(), slPath, JSON.stringify(slBody)) });
-    return r.data;
-  } catch (e) {
-    const errMsg = e.response?.data?.msg || e.message;
-    console.error(`❌ BE Fehler: ${errMsg}`, JSON.stringify(e.response?.data));
-    await aiRetry('set_breakeven', slBody, slPath, direction, symbol, errMsg);
-  }
+  const r = await axios.post(`https://api.bitget.com${slPath}`, JSON.stringify(slBody), { headers: bitgetHeaders(Date.now().toString(), slPath, JSON.stringify(slBody)) });
+  console.log(`↔️ BE gesetzt: ${symbol} @ $${entryPrice} | Size: ${size}`);
+  return r.data;
 }
 
 async function takeTp1AndBreakeven(symbol, direction) {
   const fullSymbol = symbol + 'USDT';
-  const timestamp = Date.now().toString();
-  const path = '/api/v2/mix/order/orders-plan-pending';
-  const queryString = `?symbol=${fullSymbol}&productType=USDT-FUTURES`;
-  const r = await axios.get(`https://api.bitget.com${path}${queryString}`, { headers: bitgetGetHeaders(timestamp, path, queryString) });
-  const planOrders = r.data.data?.entrustedList || r.data.data || [];
+  const planOrders = await getPlanOrders(fullSymbol);
 
   if (planOrders.length === 0) {
     const positions = await getPositions();
@@ -484,10 +512,8 @@ async function takeTp1AndBreakeven(symbol, direction) {
   const tp1Order = sorted[0];
   const tp1Size = tp1Order.size;
   const orderId = tp1Order.orderId;
-
   console.log(`🎯 TP1 gefunden: ${tp1Size} @ $${tp1Order.triggerPrice} | ID: ${orderId}`);
 
-  // Cancel TP1 plan order
   const cancelPath = '/api/v2/mix/order/cancel-plan-order';
   const cancelBody = { symbol: fullSymbol, productType: 'USDT-FUTURES', marginCoin: 'USDT', orderId };
   try {
@@ -495,7 +521,7 @@ async function takeTp1AndBreakeven(symbol, direction) {
     console.log(`❌ TP1 Order gecancelt`);
   } catch (e) {
     const errMsg = e.response?.data?.msg || e.message;
-    console.error(`❌ Cancel TP1 Fehler: ${errMsg}`, JSON.stringify(e.response?.data));
+    console.error(`❌ Cancel TP1 Fehler: ${errMsg}`);
     await aiRetry('cancel_tp1', cancelBody, cancelPath, direction, symbol, errMsg);
   }
 
@@ -503,20 +529,18 @@ async function takeTp1AndBreakeven(symbol, direction) {
   const closeSide = direction === 'Long' ? 'sell' : 'buy';
   const holdSide = direction === 'Long' ? 'long' : 'short';
 
-  // Market close TP1 size
   const closeBody = {
     symbol: fullSymbol, productType: 'USDT-FUTURES', marginMode: 'isolated',
     marginCoin: 'USDT', size: parseFloat(tp1Size).toFixed(precision),
     side: closeSide, holdSide, tradeSide: 'close', orderType: 'market'
   };
   const closePath = '/api/v2/mix/order/place-order';
-
   try {
     await axios.post(`https://api.bitget.com${closePath}`, JSON.stringify(closeBody), { headers: bitgetHeaders(Date.now().toString(), closePath, JSON.stringify(closeBody)) });
     console.log(`✅ TP1 at Market geschlossen`);
   } catch (e) {
     const errMsg = e.response?.data?.msg || e.message;
-    console.error(`❌ TP1 Close Fehler: ${errMsg}`, JSON.stringify(e.response?.data));
+    console.error(`❌ TP1 Close Fehler: ${errMsg}`);
     await aiRetry('take_tp1_close', closeBody, closePath, direction, symbol, errMsg);
   }
 
@@ -545,13 +569,23 @@ async function monitorPositions() {
           const currentPrice = await getPrice(asset).catch(() => 0);
           const direction = trade.direction === 'Long' ? 1 : -1;
           const pnl = trade.totalSize * (currentPrice - trade.entry) * direction;
+
+          // Ehrliche Begründung statt blindes TP_FINAL
+          const slHit = (currentPrice <= trade.stopLoss && trade.direction === 'Long') ||
+                        (currentPrice >= trade.stopLoss && trade.direction === 'Short');
+          const nearEntry = Math.abs(currentPrice - trade.entry) / trade.entry < 0.002;
+          let closeReason, reasonText;
+          if (slHit) { closeReason = 'SL'; reasonText = 'Preis am Stop Loss'; }
+          else if (nearEntry && trade.beSet) { closeReason = 'BE'; reasonText = 'Preis am Breakeven (Entry)'; }
+          else { closeReason = 'TP_FINAL'; reasonText = 'Position vollständig geschlossen (TP final oder manuell)'; }
+
           trade.status = 'closed';
           trade.closeTime = new Date().toISOString();
           trade.pnl = parseFloat(pnl.toFixed(2));
-          trade.closeReason = (currentPrice <= trade.stopLoss && trade.direction === 'Long') || (currentPrice >= trade.stopLoss && trade.direction === 'Short') ? 'SL' : 'TP_FINAL';
-          trade.events.push({ time: new Date().toISOString(), type: trade.closeReason, price: currentPrice, pnl: trade.pnl });
+          trade.closeReason = closeReason;
+          trade.events.push({ time: new Date().toISOString(), type: closeReason, price: currentPrice, pnl: trade.pnl });
           saveTrades();
-          await notify(`${trade.pnl > 0 ? '🟢' : '🔴'} <b>Position geschlossen</b>\nAsset: ${asset}\nGrund: ${trade.closeReason}\nPnL: ${trade.pnl > 0 ? '+' : ''}$${trade.pnl}`);
+          await notify(`${trade.isTest ? '🧪 ' : ''}${trade.pnl > 0 ? '🟢' : '🔴'} <b>Position geschlossen</b>\nAsset: ${asset}\nGrund: ${closeReason}\n📋 ${reasonText}\nPreis: $${currentPrice} | Entry: $${trade.entry} | SL: $${trade.stopLoss}\nPnL: ${trade.pnl > 0 ? '+' : ''}$${trade.pnl}`);
         }
         delete lastPositionSizes[symbol];
       }
@@ -590,12 +624,12 @@ async function monitorPositions() {
               await moveSlToBreakeven(asset, trade.direction, trade.entry);
               trade.beSet = true;
               trade.events.push({ time: new Date().toISOString(), type: 'AUTO_BE_SET', price: trade.entry, pnl: 0 });
-              await notify(`↔️ <b>Auto-BE gesetzt</b>\n${asset} @ $${trade.entry}`);
+              await notify(`↔️ <b>Auto-BE gesetzt</b>\n${asset} @ $${trade.entry}\n📋 TP1 wurde getriggert, SL automatisch auf Entry`);
             } catch (e) { console.error('Auto-BE Fehler:', e.message); }
           }
 
           saveTrades();
-          await notify(`🎯 <b>TP${tpNumber} getriggert!</b>\n${asset} @ $${currentPrice}\nTeilgewinn: +$${partialPnl.toFixed(2)}`);
+          await notify(`${trade.isTest ? '🧪 ' : ''}🎯 <b>TP${tpNumber} getriggert!</b>\n${asset} @ $${currentPrice}\nTeilgewinn: +$${partialPnl.toFixed(2)}`);
         }
       }
       lastPositionSizes[symbol] = currentSize;
@@ -615,69 +649,66 @@ async function analyzeSignal(text, imageUrl) {
   if (imageUrl) {
     try {
       const imageResponse = await axios.get(imageUrl, { responseType: 'arraybuffer' });
-      const base64 = Buffer.from(imageResponse.data).toString('base64');
-      content.push({ type: 'image', source: { type: 'base64', media_type: 'image/png', data: base64 } });
+      const buffer = Buffer.from(imageResponse.data);
+      const mediaType = detectMediaType(buffer);
+      const base64 = buffer.toString('base64');
+      content.push({ type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } });
     } catch (e) { console.log('Bild Fehler:', e.message); }
   }
   content.push({
     type: 'text',
-    text: `Du bist ein Trading Signal Analyzer für einen Krypto-Trader. Analysiere nur DIREKTE COMMANDS des Traders.
+    text: `Du bist ein Trading Signal Analyzer für einen Krypto-Trader. Der Trader schreibt oft auch Smalltalk, Unsinn, Statusberichte oder unklare Nachrichten. Du führst NUR bei 100% eindeutigen, direkten Commands etwas aus. Im Zweifel IMMER signal:false.
 
 Nachricht: "${text}"
 
-Antworte NUR in JSON ohne Markdown.
+Antworte NUR in JSON ohne Markdown. Füge IMMER ein "reason" Feld hinzu (1 kurzer Satz, warum du so entschieden hast).
 
-Für ein neues Trade Signal:
-{
-  "signal": true, "action": "open", "asset": "BTC", "direction": "Long",
-  "entry": 67000, "stopLoss": 65000,
-  "targets": [{ "price": 68000 }, { "price": 69500 }], "confidence": "Hoch"
-}
+Neues Trade Signal:
+{"signal":true,"action":"open","asset":"BTC","direction":"Long","entry":67000,"stopLoss":65000,"targets":[{"price":68000},{"price":69500}],"confidence":"Hoch","reason":"..."}
 
-Für Close Signal ("close", "exit", "closing now", "manually closing"):
-{ "signal": true, "action": "close", "asset": "BTC" }
+Market Order ohne genauen Entry ("market","CMP","current price"):
+{"signal":true,"action":"open","asset":"BTC","direction":"Long","entry":null,"stopLoss":65000,"targets":[{"price":68000}],"confidence":"Hoch","reason":"..."}
 
-Für Breakeven ("stops to BE", "stops to break even", "SL to BE", "move stops BE", "moving stops BE"):
-{ "signal": true, "action": "breakeven", "asset": "BTC" }
+Close ("close X","closing X now","exit X","out of X manually"):
+{"signal":true,"action":"close","asset":"BTC","reason":"..."}
 
-Für Take TP1 + BE ("taking TP1", "manually taking TP1", "taking TP1 and moving stops BE", "taking first profit"):
-{ "signal": true, "action": "take_tp1_be", "asset": "BTC", "direction": "Long" }
+Breakeven ("stops to BE","stops to break even","move stops BE","SL to entry"):
+{"signal":true,"action":"breakeven","asset":"BTC","reason":"..."}
 
-Falls kein Signal: { "signal": false }
+Take TP1 + BE ("TP1 here","taking TP1","manually taking TP1","take first profit","TP1 now"):
+{"signal":true,"action":"take_tp1_be","asset":"BTC","direction":"Long","reason":"..."}
 
-WICHTIGE REGELN:
-- Asset = ERSTES WORT vor Long/Short, immer GROSSBUCHSTABEN
-- Extrahiere ALLE TPs EXAKT – keine Zahlen erfinden
-- Bei Bildern: Preiszahlen absolut präzise ablesen
-- "TP1 hit", "TP2 hit", "third TP hit", "got stopped" → signal: false
-- "stopped out of X", "closing X in green/red", "got stopped on X" → signal: false
-- "both got inches away from TP", "gonna manually take" → signal: false (Ankündigung, kein Command)
-- Nur DIREKTE jetzt ausführbare Commands erkennen
-- Bei Long: TPs müssen ÜBER dem Entry liegen
-- Bei Short: TPs müssen UNTER dem Entry liegen
-- "stops to BE", "stops to break even" → action: breakeven
-- "manually taking TP1", "taking TP1" → action: take_tp1_be
-- Confidence ist Hoch nur wenn SL erkennbar ist`
+Kein Signal: {"signal":false,"reason":"..."}
+
+STRIKTE REGELN:
+- NUR bei eindeutigem, direktem Command handeln. Unsicher? → signal:false
+- "TP1 here on INIT","TP1 now","taking TP1" = take_tp1_be (Trader nimmt jetzt TP1!)
+- "TP1 hit","TP2 hit","third TP hit" = NUR Info → signal:false
+- "stopped out","closing X in green/red","got stopped","both got inches away","gonna take" = Bericht/Ankündigung → signal:false
+- Asset = erstes Coin-Wort, GROSSBUCHSTABEN
+- Alle TPs exakt aus Text/Bild, niemals erfinden
+- "market","CMP" → entry:null (NICHT als Zahl)
+- Long: TPs über Entry | Short: TPs unter Entry
+- Confidence "Hoch" nur wenn SL klar erkennbar
+- reason Feld ist PFLICHT`
   });
 
   const response = await axios.post('https://api.anthropic.com/v1/messages', {
     model: 'claude-sonnet-4-6',
     max_tokens: 400,
     messages: [{ role: 'user', content }]
-  }, {
-    headers: { 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' }
-  });
+  }, { headers: { 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' } });
 
   const raw = response.data.content[0].text.replace(/```json|```/g, '').trim();
   return JSON.parse(raw);
 }
 
-function buildTestReport(signal, entryPrice) {
+function buildTestReport(signal, entryPrice, riskUSD) {
   if (!signal.stopLoss) return '⚠️ Kein SL';
   const direction = signal.direction === 'Long' ? 1 : -1;
   const riskPerUnit = Math.abs(entryPrice - signal.stopLoss);
-  const totalSize = TEST_RISK_USD / riskPerUnit;
-  let report = `\n💼 <b>Berechnung</b>\nEntry: $${entryPrice.toFixed(4)}\nSize: ${totalSize.toFixed(2)} ${signal.asset}\nNotional: $${(totalSize * entryPrice).toFixed(2)}\n\n❌ SL Hit: -$${TEST_RISK_USD.toFixed(2)}\n`;
+  const totalSize = riskUSD / riskPerUnit;
+  let report = `\n💼 <b>Berechnung</b>\nEntry: $${entryPrice.toFixed(4)}\nSize: ${totalSize.toFixed(2)} ${signal.asset}\nNotional: $${(totalSize * entryPrice).toFixed(2)}\n\n❌ SL Hit: -$${riskUSD.toFixed(2)}\n`;
   if (signal.targets?.length > 0) {
     const distribution = getTPDistribution(signal.targets.length);
     let totalProfit = 0;
@@ -687,12 +718,12 @@ function buildTestReport(signal, entryPrice) {
       totalProfit += profit;
       report += `TP${i + 1} ($${signal.targets[i].price}) ${distribution[i]}%: +$${profit.toFixed(2)}\n`;
     }
-    report += `\n💰 <b>Gesamt: +$${totalProfit.toFixed(2)} | RR: 1:${(totalProfit / TEST_RISK_USD).toFixed(2)}</b>`;
+    report += `\n💰 <b>Gesamt: +$${totalProfit.toFixed(2)} | RR: 1:${(totalProfit / riskUSD).toFixed(2)}</b>`;
   }
   return report;
 }
 
-// ─── Telegram Commands ─────────────────────────────────────
+// ─── Telegram Commands (nur Basics) ────────────────────────
 tg.onText(/\/h/, (msg) => {
   tg.sendMessage(msg.chat.id, `
 📖 <b>Commands Übersicht</b>
@@ -716,6 +747,46 @@ tg.onText(/\/h/, (msg) => {
   `, { parse_mode: 'HTML' });
 });
 
+tg.onText(/\/positions/, async (msg) => {
+  try {
+    const positions = await getPositions();
+    if (!positions.length) return tg.sendMessage(msg.chat.id, '📭 Keine offenen Positionen.');
+
+    for (const p of positions) {
+      const asset = p.symbol.replace('USDT', '');
+      const pnl = parseFloat(p.unrealizedPL);
+      const rl = parseFloat(p.achievedProfits || 0);
+      const isLong = p.holdSide === 'long';
+      const trade = getOpenTrade(asset);
+
+      const planOrders = await getPlanOrders(p.symbol);
+      let tpText = '';
+      if (planOrders.length > 0) {
+        const sorted = [...planOrders].sort((a, b) =>
+          isLong ? parseFloat(a.triggerPrice) - parseFloat(b.triggerPrice)
+                 : parseFloat(b.triggerPrice) - parseFloat(a.triggerPrice)
+        );
+        tpText = sorted.map((o, i) => `TP${i + 1}: $${parseFloat(o.triggerPrice).toFixed(4)}`).join('\n');
+      } else {
+        tpText = '— (keine TPs)';
+      }
+
+      const text = `${isLong ? '🟢 Long' : '🔴 Short'} <b>${p.symbol}</b>
+Entry: $${parseFloat(p.openPriceAvg).toFixed(4)}
+SL: $${trade?.stopLoss || '—'}
+${tpText}
+─────────────
+Unrealisiert: ${pnl >= 0 ? '🟢' : '🔴'} $${pnl.toFixed(2)}
+Realisiert: ${rl >= 0 ? '🟢' : '🔴'} $${rl.toFixed(2)}`;
+
+      await tg.sendMessage(msg.chat.id, text, {
+        parse_mode: 'HTML',
+        reply_markup: { inline_keyboard: [[{ text: '❌ Close', callback_data: `close_${asset}` }]] }
+      });
+    }
+  } catch (e) { tg.sendMessage(msg.chat.id, `❌ Fehler: ${e.message}`); }
+});
+
 tg.onText(/\/manual/, (msg) => {
   manualTrade = { step: 'coin', data: {}, chatId: msg.chat.id };
   tg.sendMessage(msg.chat.id, `📝 <b>Manueller Trade</b>\n\nWelchen Coin?`, { parse_mode: 'HTML' });
@@ -734,7 +805,7 @@ tg.onText(/\/history/, (msg) => {
   if (!closed.length) return tg.sendMessage(msg.chat.id, '📭 Keine History.');
   let text = '📋 <b>Letzte Trades</b>\n\n';
   for (const t of closed) {
-    text += `${t.pnl > 0 ? '🟢' : '🔴'} <b>${t.asset}</b> ${t.direction} | ${t.closeReason} | ${t.pnl > 0 ? '+' : ''}$${t.pnl} | ${new Date(t.openTime).toLocaleDateString('de-DE')}\n`;
+    text += `${t.isTest ? '🧪 ' : ''}${t.pnl > 0 ? '🟢' : '🔴'} <b>${t.asset}</b> ${t.direction} | ${t.closeReason} | ${t.pnl > 0 ? '+' : ''}$${t.pnl} | ${new Date(t.openTime).toLocaleDateString('de-DE')}\n`;
   }
   tg.sendMessage(msg.chat.id, text, { parse_mode: 'HTML' });
 });
@@ -744,7 +815,7 @@ tg.onText(/\/trade (.+)/, (msg, match) => {
   const assetTrades = trades.filter(t => t.asset === asset).slice(-3).reverse();
   if (!assetTrades.length) return tg.sendMessage(msg.chat.id, `📭 Keine Trades für ${asset}.`);
   for (const t of assetTrades) {
-    let text = `📊 <b>${t.asset} ${t.direction}</b>\n`;
+    let text = `${t.isTest ? '🧪 ' : ''}📊 <b>${t.asset} ${t.direction}</b>\n`;
     text += `Status: ${t.status === 'open' ? '🟡 Offen' : (t.pnl > 0 ? '🟢 Win' : '🔴 Loss')}\n`;
     text += `Entry: $${t.entry} | SL: $${t.stopLoss}\n`;
     if (t.targets?.length > 0) text += `TPs: ${t.targets.map(tp => '$' + tp.price).join(' | ')}\n`;
@@ -753,30 +824,35 @@ tg.onText(/\/trade (.+)/, (msg, match) => {
     text += `PnL: ${t.pnl > 0 ? '+' : ''}$${t.pnl}\n`;
     if (t.events?.length > 0) {
       text += `\n<b>Events:</b>\n`;
-      for (const e of t.events) {
-        text += `• ${e.type} @ $${e.price} | ${e.pnl >= 0 ? '+' : ''}$${e.pnl || 0} | ${new Date(e.time).toLocaleString('de-DE')}\n`;
-      }
+      for (const e of t.events) text += `• ${e.type} @ $${e.price} | ${e.pnl >= 0 ? '+' : ''}$${e.pnl || 0}\n`;
     }
     tg.sendMessage(msg.chat.id, text, { parse_mode: 'HTML' });
   }
 });
 
-tg.onText(/\/status/, (msg) => {
+tg.onText(/\/status/, async (msg) => {
   const stats = getWinRate();
-  tg.sendMessage(msg.chat.id, `🤖 <b>Bot Status</b>\n\nStatus: ${botPaused ? '⏸ Pausiert' : '✅ Aktiv'}\nLive Risk: $${RISK_USD} | Test: $${TEST_RISK_USD}\nWinrate: ${stats.total > 0 ? stats.rate + '%' : 'N/A'}`, { parse_mode: 'HTML' });
+  const { equity } = await getRiskUSD(false);
+  const liveUSD = (equity * RISK_PERCENT / 100).toFixed(2);
+  const testUSD = (equity * TEST_RISK_PERCENT / 100).toFixed(2);
+  tg.sendMessage(msg.chat.id, `🤖 <b>Bot Status</b>\n\nStatus: ${botPaused ? '⏸ Pausiert' : '✅ Aktiv'}\nLive Risk: ${RISK_PERCENT}% (≈$${liveUSD})\nTest Risk: ${TEST_RISK_PERCENT}% (≈$${testUSD})\nWinrate: ${stats.total > 0 ? stats.rate + '%' : 'N/A'}`, { parse_mode: 'HTML' });
 });
 
 tg.onText(/\/pause/, (msg) => { botPaused = true; tg.sendMessage(msg.chat.id, '⏸ <b>Bot pausiert</b>', { parse_mode: 'HTML' }); });
 tg.onText(/\/resume/, (msg) => { botPaused = false; tg.sendMessage(msg.chat.id, '▶️ <b>Bot aktiv</b>', { parse_mode: 'HTML' }); });
 
-tg.onText(/\/risk/, (msg) => {
+tg.onText(/\/risk/, async (msg) => {
   waitingForRisk = true; waitingForTestRisk = false;
-  tg.sendMessage(msg.chat.id, `💰 Live Risk: <b>$${RISK_USD}</b>\n\nNeues eintippen:`, { parse_mode: 'HTML' });
+  const { equity } = await getRiskUSD(false);
+  const cur = (equity * RISK_PERCENT / 100).toFixed(2);
+  tg.sendMessage(msg.chat.id, `💰 Live Risk: <b>${RISK_PERCENT}%</b> (≈$${cur})\n\nGib den gewünschten $-Betrag ein.\nIch rechne das % vom aktuellen Kontostand ($${equity.toFixed(2)}) aus und speichere es.`, { parse_mode: 'HTML' });
 });
 
-tg.onText(/\/testrisk/, (msg) => {
+tg.onText(/\/testrisk/, async (msg) => {
   waitingForTestRisk = true; waitingForRisk = false;
-  tg.sendMessage(msg.chat.id, `🧪 Test Risk: <b>$${TEST_RISK_USD}</b>\n\nNeues eintippen:`, { parse_mode: 'HTML' });
+  const { equity } = await getRiskUSD(true);
+  const cur = (equity * TEST_RISK_PERCENT / 100).toFixed(2);
+  tg.sendMessage(msg.chat.id, `🧪 Test Risk: <b>${TEST_RISK_PERCENT}%</b> (≈$${cur})\n\nGib den gewünschten $-Betrag ein.`, { parse_mode: 'HTML' });
 });
 
 tg.onText(/\/balance/, async (msg) => {
@@ -812,31 +888,17 @@ tg.onText(/\/close (.+)/, async (msg, match) => {
   } catch (e) { tg.sendMessage(msg.chat.id, `❌ ${e.message}`); }
 });
 
-tg.onText(/\/positions/, async (msg) => {
-  try {
-    const positions = await getPositions();
-    if (!positions.length) return tg.sendMessage(msg.chat.id, '📭 Keine Positionen.');
-    for (const p of positions) {
-      const pnl = parseFloat(p.unrealizedPL);
-      const asset = p.symbol.replace('USDT', '');
-      await tg.sendMessage(msg.chat.id, `${p.holdSide === 'long' ? '🟢 Long' : '🔴 Short'} <b>${p.symbol}</b>\nSize: ${p.total} | Entry: $${parseFloat(p.openPriceAvg).toFixed(4)}\nPnL: ${pnl >= 0 ? '🟢' : '🔴'} $${pnl.toFixed(2)}`, {
-        parse_mode: 'HTML',
-        reply_markup: { inline_keyboard: [[{ text: `❌ Close ${asset}`, callback_data: `close_${asset}` }]] }
-      });
-    }
-  } catch (e) { tg.sendMessage(msg.chat.id, '❌ Fehler.'); }
-});
-
 tg.onText(/\/d/, async (msg) => {
   try {
     const [positions, balance] = await Promise.all([getPositions(), getBalance()]);
     const totalPnl = positions.reduce((sum, p) => sum + parseFloat(p.unrealizedPL), 0);
     const stats = getWinRate();
+    const equity = parseFloat(balance.accountEquity);
     let text = `📊 <b>Dashboard</b>\n\n`;
-    text += `💰 Balance: $${parseFloat(balance.accountEquity).toFixed(2)}\n`;
+    text += `💰 Balance: $${equity.toFixed(2)}\n`;
     text += `📈 PnL: ${totalPnl >= 0 ? '🟢' : '🔴'} $${totalPnl.toFixed(2)}\n`;
     text += `🎯 Positionen: ${positions.length} | 📊 Winrate: ${stats.total > 0 ? stats.rate + '%' : 'N/A'}\n`;
-    text += `⚡ Live: $${RISK_USD} | 🧪 Test: $${TEST_RISK_USD}\n`;
+    text += `⚡ Live: ${RISK_PERCENT}% (≈$${(equity * RISK_PERCENT / 100).toFixed(2)}) | 🧪 Test: ${TEST_RISK_PERCENT}%\n`;
     text += `🤖 ${botPaused ? '⏸ Pausiert' : '✅ Aktiv'}\n`;
     if (positions.length > 0) {
       text += '\n<b>Positionen:</b>\n';
@@ -849,6 +911,7 @@ tg.onText(/\/d/, async (msg) => {
   } catch (e) { tg.sendMessage(msg.chat.id, '❌ Fehler.'); }
 });
 
+// ─── Callback Queries (nur Close + Manual) ─────────────────
 tg.on('callback_query', async (query) => {
   const data = query.data;
 
@@ -861,6 +924,7 @@ tg.on('callback_query', async (query) => {
       tg.answerCallbackQuery(query.id, { text: `✅ ${asset} geschlossen!` });
       tg.editMessageText(`✅ <b>${asset}</b> geschlossen.`, { chat_id: query.message.chat.id, message_id: query.message.message_id, parse_mode: 'HTML' });
     } catch (e) { tg.answerCallbackQuery(query.id, { text: `❌ ${e.message}` }); }
+    return;
   }
 
   if (data === 'manual_long' || data === 'manual_short') {
@@ -870,6 +934,7 @@ tg.on('callback_query', async (query) => {
       tg.answerCallbackQuery(query.id);
       tg.sendMessage(manualTrade.chatId, `✅ ${manualTrade.data.direction}\n\nStop Loss Preis eingeben:`, { parse_mode: 'HTML' });
     }
+    return;
   }
 
   if (data === 'manual_confirm') {
@@ -879,14 +944,16 @@ tg.on('callback_query', async (query) => {
       manualTrade = null;
       try {
         await setLeverage(d.asset);
-        const result = await placeOrder(d.asset, d.direction, d.stopLoss, d.targets, d.risk);
+        const { riskUSD } = await getRiskUSD(false);
+        const result = await placeOrder(d.asset, d.direction, d.stopLoss, d.targets, riskUSD);
         addTrade({ asset: d.asset, direction: d.direction, stopLoss: d.stopLoss, targets: d.targets }, result.price, result.totalSize);
         const tpList = d.targets?.map((t, i) => `TP${i + 1}: $${t.price}`).join('\n') || '–';
-        await tg.sendMessage(TELEGRAM_CHAT_ID, `🟢 <b>Manueller Trade eröffnet</b>\n${d.asset} ${d.direction}\nEntry: $${result.price}\nSL: $${d.stopLoss}\n${tpList}\nRisk: $${d.risk}`, { parse_mode: 'HTML' });
+        await tg.sendMessage(TELEGRAM_CHAT_ID, `🟢 <b>Manueller Trade eröffnet</b>\n${d.asset} ${d.direction}\nEntry: $${result.price}\nSL: $${d.stopLoss}\n${tpList}\nRisk: ${RISK_PERCENT}% (≈$${riskUSD.toFixed(2)})`, { parse_mode: 'HTML' });
       } catch (e) {
         await tg.sendMessage(TELEGRAM_CHAT_ID, `❌ Fehler: ${e.response?.data?.msg || e.message}`);
       }
     }
+    return;
   }
 
   if (data === 'manual_cancel') {
@@ -896,9 +963,11 @@ tg.on('callback_query', async (query) => {
   }
 });
 
+// ─── Message Handler ───────────────────────────────────────
 tg.on('message', async (msg) => {
   if (!msg.text) return;
 
+  // Manual Trade Input
   if (manualTrade && !msg.text.startsWith('/')) {
     const chatId = manualTrade.chatId;
 
@@ -925,19 +994,10 @@ tg.on('message', async (msg) => {
       const tpPrices = msg.text.split(',').map(t => parseFloat(t.trim())).filter(t => !isNaN(t));
       if (!tpPrices.length) { tg.sendMessage(chatId, '❌ Ungültig. Nochmal:'); return; }
       manualTrade.data.targets = tpPrices.map(p => ({ price: p }));
-      manualTrade.step = 'risk';
-      tg.sendMessage(chatId, `TPs: <b>${tpPrices.map(p => '$' + p).join(', ')}</b>\n\nRisiko in $?`, { parse_mode: 'HTML' });
-      return;
-    }
-
-    if (manualTrade.step === 'risk') {
-      const risk = parseFloat(msg.text);
-      if (isNaN(risk) || risk <= 0) { tg.sendMessage(chatId, '❌ Ungültig. Nochmal:'); return; }
-      manualTrade.data.risk = risk;
       manualTrade.step = 'confirm';
       const d = manualTrade.data;
       const tpList = d.targets.map((t, i) => `TP${i + 1}: $${t.price}`).join('\n');
-      tg.sendMessage(chatId, `📋 <b>Zusammenfassung</b>\n\nAsset: ${d.asset}\nRichtung: ${d.direction}\nSL: $${d.stopLoss}\n${tpList}\nRisiko: $${d.risk}\n\nBestätigen?`, {
+      tg.sendMessage(chatId, `📋 <b>Zusammenfassung</b>\n\nAsset: ${d.asset}\nRichtung: ${d.direction}\nSL: $${d.stopLoss}\n${tpList}\nRisk: ${RISK_PERCENT}% vom Kontostand\n\nBestätigen?`, {
         parse_mode: 'HTML',
         reply_markup: { inline_keyboard: [[{ text: '✅ Bestätigen', callback_data: 'manual_confirm' }, { text: '❌ Abbrechen', callback_data: 'manual_cancel' }]] }
       });
@@ -945,17 +1005,31 @@ tg.on('message', async (msg) => {
     }
   }
 
+  // Risk Input → Dollar eingeben, % vom Kontostand berechnen & speichern
   if ((waitingForRisk || waitingForTestRisk) && !msg.text.startsWith('/')) {
     const amount = parseFloat(msg.text);
-    if (!isNaN(amount) && amount > 0) {
+    if (isNaN(amount) || amount <= 0) { tg.sendMessage(msg.chat.id, '❌ Ungültige Zahl.'); return; }
+    try {
+      const balance = await getBalance();
+      const equity = parseFloat(balance.accountEquity || 0);
+      if (equity <= 0) { tg.sendMessage(msg.chat.id, '❌ Kontostand konnte nicht ermittelt werden.'); return; }
+      const percent = (amount / equity) * 100;
+
       if (waitingForRisk) {
-        RISK_USD = amount; waitingForRisk = false; saveSettings();
-        tg.sendMessage(msg.chat.id, `✅ Live Risk: <b>$${RISK_USD}</b> (gespeichert)`, { parse_mode: 'HTML' });
+        RISK_PERCENT = parseFloat(percent.toFixed(4));
+        waitingForRisk = false;
+        saveSettings();
+        tg.sendMessage(msg.chat.id, `✅ <b>Live Risk gesetzt</b>\n\n$${amount.toFixed(2)} von $${equity.toFixed(2)}\n= <b>${RISK_PERCENT}%</b>\n\nKünftige Trades nutzen ${RISK_PERCENT}% vom jeweils aktuellen Kontostand. Bei wachsendem Kapital steigt die $-Risk automatisch mit.`, { parse_mode: 'HTML' });
       } else {
-        TEST_RISK_USD = amount; waitingForTestRisk = false; saveSettings();
-        tg.sendMessage(msg.chat.id, `✅ Test Risk: <b>$${TEST_RISK_USD}</b> (gespeichert)`, { parse_mode: 'HTML' });
+        TEST_RISK_PERCENT = parseFloat(percent.toFixed(4));
+        waitingForTestRisk = false;
+        saveSettings();
+        tg.sendMessage(msg.chat.id, `✅ <b>Test Risk gesetzt</b>\n\n$${amount.toFixed(2)} von $${equity.toFixed(2)}\n= <b>${TEST_RISK_PERCENT}%</b>`, { parse_mode: 'HTML' });
       }
-    } else { tg.sendMessage(msg.chat.id, '❌ Ungültige Zahl.'); }
+    } catch (e) {
+      tg.sendMessage(msg.chat.id, `❌ Fehler: ${e.message}`);
+    }
+    return;
   }
 });
 
@@ -970,7 +1044,7 @@ client.on('ready', async () => {
   setInterval(saveBalanceSnapshot, 60 * 1000);
   setTimeout(monitorPositions, 5000);
   setTimeout(saveBalanceSnapshot, 5000);
-  await notify(`✅ <b>Bot gestartet</b>\nLive Risk: $${RISK_USD} | Max: $${MAX_POSITION_USD}`);
+  await notify(`✅ <b>Bot gestartet</b>\nLive Risk: ${RISK_PERCENT}% | Test Risk: ${TEST_RISK_PERCENT}%`);
 });
 
 client.on('messageCreate', async (message) => {
@@ -987,29 +1061,20 @@ client.on('messageCreate', async (message) => {
   try {
     signal = await analyzeSignal(textContent, imageUrl);
     console.log(`📊 Signal:`, JSON.stringify(signal));
-
-    if (isTest) {
-      if (!signal.signal) { await notify(`🧪 <b>Kein Signal</b>\n${textContent?.substring(0, 100)}`); return; }
-      if (signal.action === 'take_tp1_be') { await notify(`🧪 <b>TEST – Take TP1 + BE</b>\nAsset: ${signal.asset}`); return; }
-      let entryPrice = signal.entry;
-      if (!entryPrice && signal.asset) try { entryPrice = await getPrice(signal.asset); } catch (e) {}
-      const tpList = signal.targets?.map((t, i) => `TP${i + 1}: $${t.price}`).join('\n') || '–';
-      let testMsg = `🧪 <b>TEST – Kein Trade ausgeführt</b>\n\nAsset: ${signal.asset || '?'}\nRichtung: ${signal.direction || '?'}\nEntry: ${entryPrice ? '$' + entryPrice : 'Market'}\nSL: ${signal.stopLoss ? '$' + signal.stopLoss : '–'}\n${tpList}\nConfidence: ${signal.confidence || '?'}`;
-      if (entryPrice && signal.stopLoss) testMsg += '\n' + buildTestReport(signal, entryPrice);
-      await notify(testMsg);
-      return;
-    }
+    if (signal.reason) console.log(`💭 Grund: ${signal.reason}`);
 
     if (!signal.signal) return;
 
+    // Close
     if (signal.action === 'close') {
       await closePosition(signal.asset);
       const trade = getOpenTrade(signal.asset);
       if (trade) { trade.status = 'closed'; trade.closeTime = new Date().toISOString(); trade.closeReason = 'MANUAL_DISCORD'; saveTrades(); }
-      await notify(`🔴 <b>Position geschlossen</b>\n${signal.asset}`);
+      await notify(`${isTest ? '🧪 ' : ''}🔴 <b>Position geschlossen</b>\n${signal.asset}\n📋 ${signal.reason || 'Close Signal'}`);
       return;
     }
 
+    // Breakeven
     if (signal.action === 'breakeven') {
       let entryPrice = signal.entry;
       if (!entryPrice && signal.asset) {
@@ -1020,64 +1085,64 @@ client.on('messageCreate', async (message) => {
       if (!entryPrice) { console.log('⏭️ BE: kein Entry gefunden'); return; }
       const dir = signal.direction || getOpenTrade(signal.asset)?.direction || 'Long';
       await moveSlToBreakeven(signal.asset, dir, entryPrice);
-      await notify(`↔️ <b>SL auf BE gesetzt</b>\n${signal.asset} @ $${entryPrice}`);
+      await notify(`${isTest ? '🧪 ' : ''}↔️ <b>SL auf BE gesetzt</b>\n${signal.asset} @ $${entryPrice}\n📋 ${signal.reason || 'BE Signal'}`);
       return;
     }
 
+    // Take TP1 + BE
     if (signal.action === 'take_tp1_be') {
       const dir = signal.direction || getOpenTrade(signal.asset)?.direction || 'Long';
       const result = await takeTp1AndBreakeven(signal.asset, dir);
       if (result.tp1AlreadyFilled) {
-        await notify(`↔️ <b>TP1 bereits getriggert – BE gesetzt</b>\n${signal.asset}`);
+        await notify(`${isTest ? '🧪 ' : ''}↔️ <b>TP1 bereits getriggert – BE gesetzt</b>\n${signal.asset}\n📋 ${signal.reason || ''}`);
       } else {
-        await notify(`✅ <b>TP1 geschlossen + BE gesetzt</b>\n${signal.asset} | ${result.tp1Size} Units`);
+        await notify(`${isTest ? '🧪 ' : ''}✅ <b>TP1 geschlossen + BE gesetzt</b>\n${signal.asset} | ${result.tp1Size} Units\n📋 ${signal.reason || ''}`);
       }
       return;
     }
 
-    if (signal.confidence === 'Niedrig' || !signal.stopLoss || !signal.asset) return;
+    // Open Trade
+    if (signal.action === 'open') {
+      if (signal.confidence === 'Niedrig' || !signal.stopLoss || !signal.asset) return;
 
-    const existingPosition = (await getPositions()).find(p => p.symbol === signal.asset + 'USDT');
-    if (existingPosition) {
-      console.log(`⏭️ Duplicate: ${signal.asset} bereits offen`);
-      await notify(`⚠️ <b>Duplicate geblockt</b>\n${signal.asset} bereits offen`);
-      return;
+      const existingPosition = (await getPositions()).find(p => p.symbol === signal.asset + 'USDT');
+      if (existingPosition) {
+        console.log(`⏭️ Duplicate: ${signal.asset} bereits offen`);
+        await notify(`⚠️ <b>Duplicate geblockt</b>\n${signal.asset} bereits offen`);
+        return;
+      }
+
+      // TP Validation – NUR wenn entry eine echte Zahl ist
+      if (signal.targets && signal.entry && !isNaN(parseFloat(signal.entry))) {
+        const entryRef = parseFloat(signal.entry);
+        const before = signal.targets.length;
+        signal.targets = signal.targets.filter(tp =>
+          signal.direction === 'Long' ? tp.price > entryRef : tp.price < entryRef
+        );
+        if (signal.targets.length < before)
+          console.log(`⚠️ ${before - signal.targets.length} TP(s) gegen Signal-Entry gefiltert`);
+      }
+
+      const { riskUSD, equity, percent } = await getRiskUSD(isTest);
+      if (riskUSD <= 0) { await notify(`❌ Risk konnte nicht berechnet werden (Kontostand?)`); return; }
+
+      await setLeverage(signal.asset);
+      const result = await placeOrder(signal.asset, signal.direction, signal.stopLoss, signal.targets, riskUSD);
+      addTrade(signal, result.price, result.totalSize, isTest);
+
+      const tpList = signal.targets?.map((t, i) => `TP${i + 1}: $${t.price}`).join('\n') || '–';
+      await notify(`${isTest ? '🧪 ' : ''}🟢 <b>Trade eröffnet</b>\nAsset: ${signal.asset} ${signal.direction}\nEntry: $${result.price}\nSL: $${signal.stopLoss}\n${tpList}\nRisk: ${percent}% (≈$${riskUSD.toFixed(2)} von $${equity.toFixed(2)})`);
     }
-
-    // TP Validation gegen Signal Entry
-    if (signal.targets && signal.entry) {
-      const before = signal.targets.length;
-      signal.targets = signal.targets.filter(tp =>
-        signal.direction === 'Long' ? tp.price > signal.entry : tp.price < signal.entry
-      );
-      if (signal.targets.length < before)
-        console.log(`⚠️ ${before - signal.targets.length} TP(s) gegen Signal-Entry gefiltert`);
-    }
-
-    await setLeverage(signal.asset);
-    const result = await placeOrder(signal.asset, signal.direction, signal.stopLoss, signal.targets);
-    addTrade(signal, result.price, result.totalSize);
-
-    const tpList = signal.targets?.map((t, i) => `TP${i + 1}: $${t.price}`).join('\n') || '–';
-    await notify(`🟢 <b>Trade eröffnet</b>\nAsset: ${signal.asset} ${signal.direction}\nEntry: $${result.price}\nSL: $${signal.stopLoss}\n${tpList}\nRisk: $${RISK_USD}`);
 
   } catch (err) {
     const bitgetError = err.response?.data;
     const errMsg = bitgetError?.msg || err.message;
     console.error(`❌ Fehler: ${errMsg}`);
-    console.error(`❌ Bitget Response:`, JSON.stringify(bitgetError));
+    console.error(`❌ Response:`, JSON.stringify(bitgetError));
 
-    // AI Retry nur bei Bitget 400 mit aktivem Signal
     if (err.response?.status === 400 && signal?.asset && signal?.action === 'open') {
       await notify(`⚠️ <b>Fehler – AI Retry startet</b>\n${signal.asset} | ${errMsg}`);
-      await aiRetry(
-        signal.action || 'open',
-        null,
-        '/api/v2/mix/order/place-order',
-        signal.direction || 'Long',
-        signal.asset,
-        errMsg
-      );
+      await aiRetry('open', null, '/api/v2/mix/order/place-order', signal.direction || 'Long', signal.asset, errMsg);
     } else {
       await notify(`❌ <b>Fehler</b>: ${errMsg}`);
     }
