@@ -131,34 +131,75 @@ async function saveBalanceSnapshot() {
   } catch (e) { console.error('Balance snapshot Fehler:', e.message); }
 }
 
-// ─── Express + Basic Auth ──────────────────────────────────
-function basicAuth(req, res, next) {
-  const auth = req.headers.authorization;
-  if (!auth) { res.set('WWW-Authenticate', 'Basic realm="Trading Dashboard"'); return res.status(401).send('Login erforderlich'); }
-  try {
-    const [user, pass] = Buffer.from(auth.split(' ')[1], 'base64').toString().split(':');
-    if (user === DASHBOARD_USERNAME && pass === DASHBOARD_PASSWORD) return next();
-  } catch (e) {}
-  res.set('WWW-Authenticate', 'Basic realm="Trading Dashboard"');
-  return res.status(401).send('Falsche Login-Daten');
-}
-app.use(basicAuth);
+// ─── Cookie Session Auth ───────────────────────────────────
+const SESSIONS = new Map();
+const SESSION_TTL = 30 * 24 * 60 * 60 * 1000; // 30 Tage
 
+function createSession(user) {
+  const token = crypto.randomBytes(24).toString('hex');
+  SESSIONS.set(token, { user, expires: Date.now() + SESSION_TTL });
+  return token;
+}
+
+function getSessionUser(req) {
+  const cookie = req.headers.cookie || '';
+  const match = cookie.match(/td_session=([^;]+)/);
+  if (!match) return null;
+  const session = SESSIONS.get(match[1]);
+  if (!session || session.expires < Date.now()) {
+    if (session) SESSIONS.delete(match[1]);
+    return null;
+  }
+  return { user: session.user, token: match[1] };
+}
+
+function requireAuth(req, res, next) {
+  if (!getSessionUser(req)) return res.status(401).json({ error: 'Nicht angemeldet' });
+  next();
+}
+
+// ─── Public Routes ─────────────────────────────────────────
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'dashboard.html')));
 app.get('/health', (req, res) => res.json({ status: 'ok', bot: 'running', paused: botPaused }));
-app.get('/api/trades', (req, res) => res.json(trades));
-app.get('/api/stats', (req, res) => res.json(getWinRate()));
-app.get('/api/positions', async (req, res) => {
+
+app.post('/api/login', (req, res) => {
+  const { username, password } = req.body || {};
+  if (username !== DASHBOARD_USERNAME || password !== DASHBOARD_PASSWORD)
+    return res.status(401).json({ error: 'Falsche Anmeldedaten' });
+  const token = createSession(username);
+  const secure = req.headers['x-forwarded-proto'] === 'https' ? '; Secure' : '';
+  res.setHeader('Set-Cookie', `td_session=${token}; HttpOnly; Path=/; Max-Age=${SESSION_TTL / 1000}; SameSite=Lax${secure}`);
+  res.json({ ok: true, user: username });
+});
+
+app.post('/api/logout', (req, res) => {
+  const s = getSessionUser(req);
+  if (s) SESSIONS.delete(s.token);
+  res.setHeader('Set-Cookie', 'td_session=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax');
+  res.json({ ok: true });
+});
+
+app.get('/api/me', (req, res) => {
+  const s = getSessionUser(req);
+  if (!s) return res.status(401).json({ error: 'Nicht angemeldet' });
+  res.json({ user: s.user });
+});
+
+// ─── Protected Routes ──────────────────────────────────────
+app.get('/api/trades', requireAuth, (req, res) => res.json(trades));
+app.get('/api/stats', requireAuth, (req, res) => res.json(getWinRate()));
+app.get('/api/positions', requireAuth, async (req, res) => {
   try { res.json(await getPositions()); } catch (e) { res.status(500).json({ error: e.message }); }
 });
-app.get('/api/balance', async (req, res) => {
+app.get('/api/balance', requireAuth, async (req, res) => {
   try { res.json(await getBalance()); } catch (e) { res.status(500).json({ error: e.message }); }
 });
-app.get('/api/equity', (req, res) => {
+app.get('/api/equity', requireAuth, (req, res) => {
   const days = parseInt(req.query.days) || 7;
   const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
   res.json(balanceHistory.filter(b => new Date(b.time) >= cutoff));
 });
+
 app.listen(PORT, () => console.log(`🌐 Web Server läuft auf Port ${PORT}`));
 
 // ─── Telegram ──────────────────────────────────────────────
